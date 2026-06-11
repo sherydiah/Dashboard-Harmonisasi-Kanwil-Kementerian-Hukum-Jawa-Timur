@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Papan Informasi Harmonisasi Perda – Jawa Timur</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --ink:#0A1628; --ink2:#0F2040; --panel:#0D1E35; --rule:#1A3255;
+  --gold:#C9A84C; --gold2:#E8C86A; --red:#C8102E;
+  --white:#F5F0E8; --white2:#D4CEC4;
+  --green:#1DB87A; --amber:#E8A020; --blue:#2B8EE8;
+  --text:#E8E0D0; --muted:#6A8AAA;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  background:var(--ink); color:var(--text);
+  font-family:'DM Sans',sans-serif;
+  height:100vh; overflow:hidden;
+  display:flex; flex-direction:column;
+}
+
+/* ── HEADER ── */
+.hd {
+  background:linear-gradient(135deg,#0A1628,#0D1E35);
+  border-bottom:2px solid var(--gold);
+  padding:0 24px; height:62px;
+  display:flex; align-items:center; justify-content:space-between;
+  flex-shrink:0; position:relative; z-index:30;
+}
+.hd-left { display:flex; align-items:center; gap:14px; }
+.emblem {
+  width:40px; height:40px;
+  background:radial-gradient(circle at 40% 35%,var(--gold2),var(--gold));
+  border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:20px; box-shadow:0 0 14px rgba(201,168,76,.4); flex-shrink:0;
+}
+.hd-title h1 {
+  font-family:'Playfair Display',serif;
+  font-size:16px; font-weight:700; color:var(--white); line-height:1.2;
+}
+.hd-title p { font-size:9.5px; color:var(--muted); margin-top:2px; letter-spacing:.7px; text-transform:uppercase; }
+.hd-right { display:flex; align-items:center; gap:14px; }
+#clock { font-family:'DM Mono',monospace; font-size:24px; font-weight:500; color:var(--gold); line-height:1; }
+.clock-date { font-size:10px; color:var(--muted); margin-top:2px; }
+.live-badge {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(29,184,122,.1); border:1px solid rgba(29,184,122,.3);
+  border-radius:20px; padding:5px 12px;
+  font-size:10px; color:var(--green); letter-spacing:.8px; text-transform:uppercase; font-weight:600;
+}
+.live-dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:blink 1.4s infinite; }
+@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 6px #1DB87A}50%{opacity:.3;box-shadow:none}}
+
+/* Tab switcher */
+.tabs { display:flex; gap:4px; background:var(--ink2); border-radius:8px; padding:3px; border:1px solid var(--rule); }
+.tab-btn {
+  background:transparent; border:none; color:var(--muted);
+  font-family:'DM Sans',sans-serif; font-size:11px; font-weight:600;
+  padding:7px 16px; border-radius:6px; cursor:pointer;
+  letter-spacing:.5px; transition:all .15s;
+}
+.tab-btn.active { background:var(--gold); color:var(--ink); }
+.tab-btn:not(.active):hover { color:var(--text); }
+
+/* ── BODY ── */
+.body { flex:1; display:none; min-height:0; overflow:hidden; }
+.body.active { display:grid; }
+#view-board.active { grid-template-columns:290px 1fr 268px; }
+
+/* ── LEFT ── */
+.left {
+  background:var(--panel); border-right:1px solid var(--rule);
+  padding:16px 14px; display:flex; flex-direction:column; gap:14px;
+  overflow-y:auto; overflow-x:hidden; min-height:0;
+}
+.sec-lbl {
+  font-size:9px; letter-spacing:1.8px; text-transform:uppercase;
+  color:var(--muted); font-weight:600;
+  display:flex; align-items:center; gap:8px; flex-shrink:0;
+}
+.sec-lbl::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--rule),transparent); }
+
+.big-stat {
+  background:linear-gradient(135deg,rgba(201,168,76,.07),rgba(201,168,76,.02));
+  border:1px solid rgba(201,168,76,.22);
+  border-radius:12px; padding:16px 12px 14px; position:relative; flex-shrink:0;
+}
+.big-stat::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  border-radius:12px 12px 0 0;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.big-num {
+  font-family:'Playfair Display',serif; font-size:48px; font-weight:900; line-height:1;
+  background:linear-gradient(135deg,var(--gold2),var(--gold));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  display:block;
+}
+.big-unit { font-size:10px; color:var(--muted); margin-top:4px; letter-spacing:1px; text-transform:uppercase; }
+.big-sub { font-size:11.5px; color:var(--text); margin-top:8px; font-weight:500; }
+
+.ring-wrap { display:flex; align-items:center; gap:12px; flex-shrink:0; }
+.ring-labels { flex:1; display:flex; flex-direction:column; gap:5px; min-width:0; }
+.rl { display:flex; align-items:center; gap:7px; font-size:11px; }
+.rl-dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+.rl-name { color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rl-val { font-family:'DM Mono',monospace; font-size:10px; color:var(--gold); flex-shrink:0; }
+
+.kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; flex-shrink:0; }
+.kpi { background:var(--ink2); border:1px solid var(--rule); border-radius:9px; padding:11px 10px; position:relative; overflow:hidden; }
+.kpi-accent { position:absolute; top:0; left:0; right:0; height:2px; }
+.kpi-v { font-family:'Playfair Display',serif; font-size:24px; font-weight:700; line-height:1; }
+.kpi-l { font-size:9px; color:var(--muted); margin-top:4px; letter-spacing:.4px; }
+
+.bar-list { display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
+.bar-meta { display:flex; justify-content:space-between; margin-bottom:3px; font-size:10.5px; }
+.bar-name { color:var(--text); font-weight:500; max-width:150px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.bar-pct { font-family:'DM Mono',monospace; font-size:10px; color:var(--gold); }
+.bar-track { height:4px; background:var(--rule); border-radius:2px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:2px; background:linear-gradient(90deg,var(--gold),var(--gold2)); }
+
+/* ── MAP CENTER ── */
+.map-area { background:linear-gradient(160deg,#040C1A 0%,#071426 60%,#050F1E 100%); position:relative; overflow:hidden; }
+.map-header {
+  position:absolute; top:0; left:0; right:0; padding:12px 18px;
+  display:flex; align-items:center; justify-content:space-between; z-index:10;
+  background:linear-gradient(180deg,rgba(4,12,26,.85) 0%,transparent 100%);
+}
+.map-title { font-family:'Playfair Display',serif; font-size:14px; font-weight:700; color:var(--gold); letter-spacing:.4px; }
+.map-hint { font-size:10px; color:var(--muted); }
+.map-legend {
+  position:absolute; bottom:50px; right:16px;
+  background:rgba(4,12,26,.9); border:1px solid var(--rule); border-radius:8px;
+  padding:10px 12px; backdrop-filter:blur(8px); z-index:10;
+}
+.ml-title { font-size:8px; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+.ml-item { display:flex; align-items:center; gap:7px; font-size:10px; color:var(--text); margin-bottom:3px; }
+.ml-item:last-child { margin-bottom:0; }
+.ml-dot { width:10px; height:8px; border-radius:2px; flex-shrink:0; }
+#map-svg { width:100%; height:100%; display:block; }
+.r-jatim { fill:#0E2240; stroke:#1E4870; stroke-width:1; }
+.r-nb { fill:#060F1C; stroke:#0D1E33; stroke-width:.7; }
+
+#tt {
+  position:absolute; pointer-events:none;
+  background:rgba(4,12,26,.96); border:1px solid var(--gold); border-radius:10px;
+  padding:14px 15px; min-width:205px; display:none; z-index:100; backdrop-filter:blur(12px);
+  box-shadow:0 8px 32px rgba(0,0,0,.7),0 0 20px rgba(201,168,76,.15);
+}
+#tt h3 {
+  font-family:'Playfair Display',serif; font-size:14px; font-weight:700; color:var(--gold);
+  margin-bottom:9px; padding-bottom:8px; border-bottom:1px solid var(--rule);
+}
+.tt-r { display:flex; justify-content:space-between; margin-bottom:4px; font-size:11px; }
+.tt-l { color:var(--muted); }
+.tt-v { font-family:'DM Mono',monospace; font-weight:500; }
+.tt-prog { height:3px; background:var(--rule); border-radius:2px; margin-top:8px; overflow:hidden; }
+.tt-pf { height:100%; border-radius:2px; }
+
+/* ── RIGHT PANEL ── */
+.right { background:var(--panel); border-left:1px solid var(--rule); display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+.right-hd { padding:14px 14px 10px; border-bottom:1px solid var(--rule); flex-shrink:0; }
+.right-hd .sec-lbl { margin-bottom:4px; }
+.right-hd p { font-size:10px; color:var(--muted); }
+.scroll-outer { flex:1; overflow:hidden; position:relative; min-height:0; }
+.scroll-inner { display:flex; flex-direction:column; }
+.d-item { padding:9px 14px; border-bottom:1px solid rgba(26,50,85,.45); display:flex; align-items:center; gap:9px; flex-shrink:0; }
+.d-rank { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); width:20px; text-align:right; flex-shrink:0; }
+.d-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.d-name { flex:1; font-size:11px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.d-badge { font-family:'DM Mono',monospace; font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; flex-shrink:0; }
+.bg-g { background:rgba(29,184,122,.15); color:#1DB87A; }
+.bg-a { background:rgba(232,160,32,.15); color:#E8A020; }
+.bg-r { background:rgba(200,16,46,.15); color:#E84060; }
+
+/* ── TICKER ── */
+.ticker { height:34px; background:var(--red); display:flex; align-items:center; overflow:hidden; flex-shrink:0; position:relative; z-index:20; border-top:1px solid rgba(255,255,255,.1); }
+.ticker-lbl { background:#8C0B1F; height:100%; padding:0 14px; display:flex; align-items:center; font-size:10px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:rgba(255,255,255,.9); flex-shrink:0; border-right:2px solid rgba(255,255,255,.12); white-space:nowrap; }
+.ticker-track { flex:1; overflow:hidden; position:relative; }
+.ticker-inner { display:flex; align-items:center; white-space:nowrap; animation:tick 40s linear infinite; }
+@keyframes tick { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+.t-item { font-size:11.5px; font-weight:500; color:rgba(255,255,255,.95); padding:0 28px; display:flex; align-items:center; gap:8px; }
+.t-sep { color:rgba(255,255,255,.3); padding:0 4px; }
+.t-badge { font-size:9.5px; font-weight:700; padding:1px 7px; border-radius:3px; }
+
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--rule);border-radius:2px}
+
+/* ── ADMIN VIEW ── */
+#view-admin.active { display:flex; justify-content:center; }
+.admin-wrap { max-width:760px; width:100%; padding:32px 24px; overflow-y:auto; }
+.admin-card {
+  background:var(--panel); border:1px solid var(--rule); border-radius:14px;
+  padding:28px; margin-bottom:20px;
+}
+.admin-card h2 {
+  font-family:'Playfair Display',serif; font-size:18px; color:var(--gold);
+  margin-bottom:6px; font-weight:700;
+}
+.admin-card .desc { font-size:12px; color:var(--muted); margin-bottom:18px; line-height:1.6; }
+.drop-zone {
+  border:2px dashed var(--rule); border-radius:12px;
+  padding:40px 20px; text-align:center; cursor:pointer;
+  transition:all .2s; background:var(--ink2);
+}
+.drop-zone:hover, .drop-zone.drag { border-color:var(--gold); background:rgba(201,168,76,.05); }
+.drop-zone .icon { font-size:36px; margin-bottom:10px; }
+.drop-zone .title { font-size:14px; font-weight:600; color:var(--text); margin-bottom:4px; }
+.drop-zone .sub { font-size:11px; color:var(--muted); }
+#file-input { display:none; }
+
+.status-msg {
+  margin-top:14px; padding:10px 14px; border-radius:8px; font-size:12px;
+  display:none;
+}
+.status-msg.ok { display:block; background:rgba(29,184,122,.1); border:1px solid rgba(29,184,122,.3); color:#1DB87A; }
+.status-msg.err { display:block; background:rgba(200,16,46,.1); border:1px solid rgba(200,16,46,.3); color:#E84060; }
+.status-msg.info { display:block; background:rgba(43,142,232,.1); border:1px solid rgba(43,142,232,.3); color:#5BA8F0; }
+
+.preview-table { width:100%; border-collapse:collapse; margin-top:16px; font-size:11px; }
+.preview-table th, .preview-table td {
+  text-align:left; padding:7px 10px; border-bottom:1px solid var(--rule);
+}
+.preview-table th { color:var(--muted); font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+.preview-table td { color:var(--text); }
+.preview-table tr:hover td { background:rgba(201,168,76,.04); }
+.preview-wrap { max-height:340px; overflow-y:auto; border-radius:8px; border:1px solid var(--rule); margin-top:10px; }
+
+.btn {
+  font-family:'DM Sans',sans-serif; font-weight:700; font-size:13px;
+  padding:11px 24px; border-radius:8px; border:none; cursor:pointer;
+  transition:all .15s; letter-spacing:.3px;
+}
+.btn-primary { background:var(--gold); color:var(--ink); }
+.btn-primary:hover { background:var(--gold2); }
+.btn-primary:disabled { opacity:.4; cursor:not-allowed; }
+.btn-ghost { background:transparent; border:1px solid var(--rule); color:var(--text); }
+.btn-ghost:hover { border-color:var(--muted); }
+.admin-actions { display:flex; gap:10px; margin-top:16px; align-items:center; }
+
+.steps { display:flex; flex-direction:column; gap:10px; }
+.step { display:flex; gap:12px; align-items:flex-start; }
+.step-num {
+  width:22px; height:22px; border-radius:50%; background:var(--ink2); border:1px solid var(--gold);
+  color:var(--gold); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; font-family:'DM Mono',monospace;
+}
+.step-text { font-size:12px; color:var(--text); line-height:1.6; padding-top:2px; }
+.step-text b { color:var(--gold2); }
+
+.shared-note {
+  font-size:11px; color:var(--muted); margin-top:14px; padding:10px 12px;
+  background:rgba(43,142,232,.06); border-left:2px solid var(--blue); border-radius:0 6px 6px 0;
+}
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-left">
+    <div class="emblem">⚖️</div>
+    <div class="hd-title">
+      <h1>Papan Informasi Harmonisasi Peraturan Daerah</h1>
+      <p>Biro Hukum &nbsp;·&nbsp; Sekretariat Daerah Provinsi Jawa Timur</p>
+    </div>
+  </div>
+  <div class="hd-right">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-board" onclick="switchTab('board')">📺 Papan Informasi</button>
+      <button class="tab-btn" id="tab-admin" onclick="switchTab('admin')">⚙️ Admin – Update Data</button>
+    </div>
+    <div>
+      <div id="clock">00:00:00</div>
+      <div class="clock-date" id="clock-date">—</div>
+    </div>
+    <div class="live-badge"><span class="live-dot"></span>Live</div>
+  </div>
+</header>
+
+<!-- ════════════════ PAPAN INFORMASI ════════════════ -->
+<div class="body active" id="view-board">
+
+  <div class="left">
+    <div class="sec-lbl">Capaian Keseluruhan</div>
+    <div class="big-stat">
+      <span class="big-num" id="big-pct">—</span>
+      <div class="big-unit">Tingkat Penerimaan</div>
+      <div class="big-sub" id="big-sub">—</div>
+    </div>
+
+    <div class="ring-wrap">
+      <svg width="82" height="82" viewBox="0 0 84 84" style="flex-shrink:0">
+        <circle cx="42" cy="42" r="34" fill="none" stroke="#1A3255" stroke-width="12"/>
+        <circle id="ring-diterima" cx="42" cy="42" r="34" fill="none" stroke="#1DB87A" stroke-width="12" transform="rotate(-90 42 42)"/>
+        <circle id="ring-kembali" cx="42" cy="42" r="34" fill="none" stroke="#C8102E" stroke-width="12" transform="rotate(-90 42 42)"/>
+        <text x="42" y="39" text-anchor="middle" font-size="13" font-weight="700" fill="#C9A84C" font-family="Playfair Display,serif" id="ring-pct">—</text>
+        <text x="42" y="52" text-anchor="middle" font-size="7" fill="#6A8AAA" font-family="DM Sans,sans-serif">DITERIMA</text>
+      </svg>
+      <div class="ring-labels" id="ring-labels"></div>
+    </div>
+
+    <div class="sec-lbl">Statistik Ringkas</div>
+    <div class="kpi-grid" id="kpi-grid"></div>
+
+    <div class="sec-lbl">5 Daerah Teratas</div>
+    <div class="bar-list" id="top5"></div>
+  </div>
+
+  <div class="map-area" id="map-wrap">
+    <div class="map-header">
+      <div class="map-title">🗺 Peta Persebaran Harmonisasi — Jawa Timur</div>
+      <div class="map-hint">Hover untuk detail per daerah</div>
+    </div>
+    <div class="map-legend">
+      <div class="ml-title">Tingkat Penerimaan</div>
+      <div class="ml-item"><div class="ml-dot" style="background:#1a3a5c;border:1px solid #1e4a7a"></div>0–24% Sangat Rendah</div>
+      <div class="ml-item"><div class="ml-dot" style="background:#1e5799"></div>25–49% Rendah</div>
+      <div class="ml-item"><div class="ml-dot" style="background:#0e7ab0"></div>50–74% Sedang</div>
+      <div class="ml-item"><div class="ml-dot" style="background:#0891b2"></div>75–89% Tinggi</div>
+      <div class="ml-item"><div class="ml-dot" style="background:#1DB87A"></div>90–100% Sangat Tinggi</div>
+      <div class="ml-item"><div class="ml-dot" style="background:#C8102E"></div>Kota / Provinsi</div>
+    </div>
+    <svg id="map-svg"></svg>
+    <div id="tt"></div>
+  </div>
+
+  <div class="right">
+    <div class="right-hd">
+      <div class="sec-lbl">Semua Daerah</div>
+      <p id="right-sub">Diurutkan berdasarkan jumlah pengajuan</p>
+    </div>
+    <div class="scroll-outer">
+      <div class="scroll-inner" id="scroll-inner"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker" id="ticker-wrap">
+  <div class="ticker-lbl">📋 Info Terkini</div>
+  <div class="ticker-track">
+    <div class="ticker-inner" id="ticker-inner"></div>
+  </div>
+</div>
+
+<!-- ════════════════ ADMIN VIEW ════════════════ -->
+<div class="body" id="view-admin">
+  <div class="admin-wrap">
+
+    <div class="admin-card">
+      <h2>📤 Update Data Harmonisasi</h2>
+      <div class="desc">
+        Upload file Excel jadwal rapat harmonisasi terbaru. Sistem akan otomatis membaca semua sheet,
+        menghitung jumlah rancangan per daerah, status (Diterima / Dikembalikan / Penjadwalan Ulang),
+        dan jenis (Raperda / Raperkada) — lalu memperbarui peta dan statistik di Papan Informasi.
+      </div>
+
+      <div class="drop-zone" id="drop-zone">
+        <div class="icon">📊</div>
+        <div class="title">Klik atau seret file Excel ke sini</div>
+        <div class="sub">Format: .xlsx — sesuai struktur "Jadwal Rapat Harmonisasi"</div>
+        <input type="file" id="file-input" accept=".xlsx,.xls">
+      </div>
+
+      <div class="status-msg" id="status-msg"></div>
+
+      <div class="preview-wrap" id="preview-wrap" style="display:none">
+        <table class="preview-table" id="preview-table"></table>
+      </div>
+
+      <div class="admin-actions" id="admin-actions" style="display:none">
+        <button class="btn btn-primary" id="btn-save" onclick="saveData()">✅ Simpan & Tampilkan di Papan Informasi</button>
+        <button class="btn btn-ghost" onclick="resetUpload()">Batal</button>
+      </div>
+
+      <div class="shared-note" id="storage-note">
+        💾 Memuat informasi penyimpanan...
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h2>📋 Cara Kerja</h2>
+      <div class="steps">
+        <div class="step"><div class="step-num">1</div><div class="step-text">Siapkan file Excel dengan kolom <b>Pemrakarsa</b>, <b>STATUS</b>, dan <b>Jenis</b> (Raperda/Raperkada) di setiap sheet — sama seperti format jadwal rapat harmonisasi yang sudah ada.</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text">Upload file melalui kotak di atas. Sistem otomatis mendeteksi header tabel di tiap sheet, lalu mencocokkan nama daerah dari kolom Pemrakarsa.</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text">Periksa <b>tabel pratinjau</b> yang muncul — pastikan jumlah per daerah sudah sesuai sebelum disimpan.</div></div>
+        <div class="step"><div class="step-num">4</div><div class="step-text">Klik <b>Simpan & Tampilkan</b>. Peta, statistik, dan ticker di tab "Papan Informasi" akan otomatis ter-update.</div></div>
+        <div class="step"><div class="step-num">5</div><div class="step-text">Status yang dikenali: <b>Diterima</b>, <b>Dikembalikan</b>, <b>Penjadwalan Ulang</b>. Jenis yang dikenali: <b>Raperda</b> dan <b>Raperkada</b> (termasuk Raperbup/Raperwal/Rapergub).</div></div>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h2>🗑️ Reset Data</h2>
+      <div class="desc">Kembalikan papan informasi ke data contoh awal (data Excel Jadwal Harmonisasi 2026).</div>
+      <button class="btn btn-ghost" onclick="restoreDefault()">Kembalikan ke Data Awal</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+// STATIC DATA
+// ════════════════════════════════════════════════════════════════════
+const GEO = {"type":"FeatureCollection","features":[{"geometry":{"type":"MultiPolygon","coordinates":[[[[113.39519290923813,-8.447035468109142],[113.4060978550302,-8.453220347942828],[113.41211998567111,-8.46689215588314],[113.4130965422879,-8.480563963729168],[113.40919029097856,-8.486748843458226],[113.39665774752446,-8.488376554067138],[113.37191816884325,-8.494724264917199],[113.29249108869186,-8.49480568048999],[113.28199302882716,-8.48821372292101],[113.27800540982709,-8.47332128237609],[113.28199303240864,-8.45720790853072],[113.29590905423449,-8.447035468109142],[113.29175865001302,-8.439711070632358],[113.28907310289148,-8.432793751005521],[113.33985435873804,-8.44402429354678],[113.39519290923813,-8.447035468109142]]],[[[111.67269941134333,-6.733656451728893],[111.69499759064367,-6.755140862181131],[111.71680748688748,-6.770684485955989],[111.74040774517447,-6.781670787774514],[111.80730228331254,-6.79949314754442],[111.84945722766986,-6.80388763821108],[111.86622155377948,-6.807793935586161],[111.88233483178712,-6.808689056757053],[111.90430749027968,-6.801527636746288],[111.93653405135174,-6.784926060634576],[111.958506708108,-6.779392201920782],[111.97624759108362,-6.784844645015094],[112.00993899537491,-6.818617406100369],[112.06788170780109,-6.893650010067801],[112.0839949870896,-6.906019776303934],[112.10694420518821,-6.9108211947639555],[112.15064537598096,-6.910088754631222],[112.19288170367606,-6.904554896037107],[112.22657311554507,-6.89267347329216],[112.23707116064882,-6.890883080763071],[112.27816816564903,-6.890883080763071],[112.29867597865764,-6.887465126939225],[112.33969159880617,-6.873142136889966],[112.36353600531514,-6.870538038811604],[112.40007571746247,-6.876722921959084],[112.4150496728869,-6.882500877222404],[112.42237389577848,-6.878838826752153],[112.4292098311037,-6.873223552508239],[112.435231968316,-6.870538038811604],[112.45484459978654,-6.875420872920877],[112.47120202124206,-6.887139614680335],[112.48601321815507,-6.900567333323485],[112.50074303318179,-6.9108211947639555],[112.52271568721658,-6.9176571023800575],[112.54281660587473,-6.917575836975769],[112.5571395223684,-6.907891584445786],[112.56283613091563,-6.887302295703113],[112.56218508942464,-6.874200089287301],[112.56251061590588,-6.866794572715179],[112.5681258497953,-6.8654111080562945],[112.58277428631773,-6.870538038811604],[112.58985436462672,-6.876071897440019],[112.5962020146636,-6.885186390913263],[112.6010848293731,-6.895603083618547],[112.60377037566381,-6.904554896037107],[112.60254967160327,-6.925957890248751],[112.58668053967061,-6.965590171487027],[112.58277428444197,-6.989922775719178],[112.58716881593892,-6.9996070280942035],[112.60954837109203,-7.033379787831025],[112.61801191949101,-7.041192382240436],[112.62867272675355,-7.045342776073495],[112.64332116504305,-7.039483405379478],[112.65739993375736,-7.037855693920227],[112.66578209741479,-7.054864197105617],[112.63379967232338,-7.063734593623357],[112.61768638924062,-7.070570501027659],[112.61060631593968,-7.079359632113413],[112.61410566913275,-7.091241204621698],[112.6225692108416,-7.1084938042376375],[112.63282310979173,-7.123793180114876],[112.6416121776044,-7.130547822026445],[112.6583764954607,-7.137627825956166],[112.67465253529717,-7.154473497534083],[112.6838485009631,-7.174899953890504],[112.67896569194048,-7.1926408966327955],[112.6643172540248,-7.198825779358712],[112.60377037993986,-7.1926408966327955],[112.620127796586,-7.214939010604386],[112.6455184223474,-7.230157120693494],[112.70069420371316,-7.254652554687278],[112.71631920596452,-7.239190348070157],[112.72950279680356,-7.220472868825321],[112.74512780402975,-7.20517349330031],[112.76823977635357,-7.19939538822055],[112.78443444442529,-7.205499005537051],[112.7978621772343,-7.218926723259635],[112.80860436786942,-7.234551761179838],[112.82325279768214,-7.262627829700231],[112.82667076992158,-7.277927355215353],[112.82634525216778,-7.293226880669307],[112.81812584182825,-7.329522320248087],[112.81617272144204,-7.346937750058202],[112.8160913458946,-7.387139636184848],[112.80746503798235,-7.4073218444719],[112.77003014758351,-7.43271254854068],[112.76148522451238,-7.448907194373186],[112.76148521635065,-7.53118247118127],[112.84489993695831,-7.592868761268273],[112.97201582829042,-7.647637728219001],[112.99048911976539,-7.651950652136195],[113.016286656059,-7.6522763145437285],[113.03711998918752,-7.655043243300028],[113.05600018718698,-7.6630183671470435],[113.07618249276564,-7.678643553224634],[113.11150150171075,-7.713148746577016],[113.13266036027709,-7.727797245612655],[113.16537519941873,-7.735935200457535],[113.18726647966565,-7.745049842043574],[113.19955488136976,-7.747491108313896],[113.20826256851905,-7.746270475179002],[113.22974694589456,-7.740818033438487],[113.24122154972305,-7.740655202239726],[113.26099693586436,-7.750176621379431],[113.28532963098614,-7.781670938859514],[113.29932702461981,-7.788506844832529],[113.32309004029715,-7.785577085010021],[113.34253990343035,-7.777764492276903],[113.37777753507768,-7.754327014371373],[113.4137475836977,-7.73626056242902],[113.43580163732577,-7.729180709954986],[113.45687910757681,-7.726332365669838],[113.47282962580239,-7.722100557036659],[113.50456789662226,-7.703789858087126],[113.52857505879376,-7.700371904999478],[113.65894616663411,-7.720147483917679],[113.67107181365553,-7.717950163997238],[113.69092858820089,-7.7090797691248385],[113.69996177935458,-7.706638202394831],[113.72299238625216,-7.708265913548407],[113.76303145013739,-7.72283299700927],[113.78589929059298,-7.726332365669838],[113.80388430336285,-7.7217748946369875],[113.81657961231701,-7.710625764250224],[113.83716881723888,-7.686130483828327],[113.85474693798837,-7.6770158420543675],[113.86963952509484,-7.677992528841964],[113.88607831170128,-7.683037892697317],[113.9094344422397,-7.686130483828327],[113.93051190964367,-7.683851748280885],[113.94507897809879,-7.677992528841964],[114.01612388444767,-7.618096482460629],[114.04558352408128,-7.611993016082961],[114.07732180981183,-7.630791908793801],[114.11695397298622,-7.680596626371832],[114.140391480473,-7.700860398602642],[114.17221112596853,-7.713474108551136],[114.19597414573474,-7.714125132925804],[114.23682701706907,-7.703301664911002],[114.2585555277474,-7.700371904999478],[114.27361087513607,-7.705498984842715],[114.31006920672044,-7.740655202239726],[114.32520592246685,-7.750258036978544],[114.33448327189322,-7.753187796838481],[114.3475040970356,-7.754327014371373],[114.36963952189413,-7.753187796838481],[114.38111411872788,-7.7541641831734145],[114.38892663338379,-7.758070629789358],[114.40674889637228,-7.773207321754501],[114.44597415960186,-7.7946917264327205],[114.46021568829858,-7.809665587000942],[114.46729576314733,-7.830987160197103],[114.46648197138897,-7.8527158112032],[114.46021569843809,-7.894952179182801],[114.45736739035272,-7.902520524787942],[114.44459068065181,-7.920668090774518],[114.44044029408285,-7.9325496602042795],[114.44027753994362,-7.943780205259641],[114.44255619705356,-7.952406653000482],[114.44548587216568,-7.959649336063705],[114.44727623740168,-7.966566657162821],[114.44678795680228,-8.014255464423199],[114.40479575857218,-8.158379682257774],[114.36597741494236,-8.357191727024269],[114.36353600686195,-8.386163054801282],[114.35865319864297,-8.40911233337055],[114.35792076417295,-8.419121942832302],[114.36011804457367,-8.43059673217618],[114.37159264705608,-8.453220347942828],[114.37338299869556,-8.498467578703387],[114.37671959566426,-8.519463783537399],[114.3889266206112,-8.528252759723792],[114.40113365146502,-8.517185048806114],[114.40512128813909,-8.491794506000259],[114.40560957527588,-8.447035468109142],[114.42318770067652,-8.46502049896095],[114.42741947238706,-8.496840168529314],[114.42611738632526,-8.562432578508826],[114.43287194797988,-8.582614927380783],[114.44532312472084,-8.602797276037622],[114.46119225290755,-8.618340739692709],[114.47803795745561,-8.624607034544203],[114.49805748698562,-8.625258058655714],[114.51075281064789,-8.628350648502149],[114.53598065697396,-8.645114744587064],[114.5891219492662,-8.664239291068526],[114.59742272022338,-8.67571377852068],[114.60336347536386,-8.68816495224802],[114.61557051480118,-8.700127932933135],[114.62566166252803,-8.716078473581494],[114.6247664680122,-8.740655158145916],[114.5971785900803,-8.775567412612256],[114.55534914832317,-8.777927262158718],[114.46762128168379,-8.748142085150507],[114.44532310755808,-8.744073109617704],[114.3889266206895,-8.748142085150507],[114.36695397244407,-8.74146901334007],[114.36980228316443,-8.726332328118072],[114.39193770767888,-8.700290764060943],[114.38526451999253,-8.664727484035103],[114.34961999874935,-8.632501039860735],[114.30258221853617,-8.611911613684551],[114.26172936903684,-8.610935227723447],[114.22087650293155,-8.636488600076579],[114.19703210644634,-8.645603237985146],[114.18653404627464,-8.63486088959396],[114.17481530180642,-8.619805619054821],[114.14820396519684,-8.62232829993888],[114.1040145080205,-8.638116010131304],[114.09489994099096,-8.637872063857719],[114.05933678261738,-8.631442937916988],[114.05079185476477,-8.62712971542175],[114.04151453070448,-8.608331131256037],[114.03199304375988,-8.604099324275602],[114.01238040813328,-8.609470348354362],[113.99488365891204,-8.618340739692709],[113.97999107369803,-8.62021239646568],[113.96802819975497,-8.604099324275602],[113.96924889536817,-8.593519806782792],[113.97315514518826,-8.579685168597452],[113.97388755405073,-8.567559355996769],[113.96436608431596,-8.562432578508826],[113.954274945521,-8.564711313186514],[113.93376711113929,-8.57447667514628],[113.92286217034865,-8.576755409809579],[113.90560956348732,-8.573907066586647],[113.87964927299478,-8.566175892163848],[113.85377036687441,-8.555108181464343],[113.83716880792691,-8.542087398281765],[113.83204187505457,-8.546807698824132],[113.82846112322127,-8.548923301952975],[113.82593833764135,-8.551039205505932],[113.8234969475342,-8.556329114591355],[113.81885827381015,-8.54176203642497],[113.81381269587246,-8.507745048418188],[113.80616296527838,-8.501071975746713],[113.79078210104556,-8.503025048207077],[113.77369226526179,-8.508070710707177],[113.760101750444,-8.515801584936973],[113.75456790378863,-8.52499763899765],[113.75074304525874,-8.528090229007452],[113.7417098251698,-8.52898519943972],[113.72388755765999,-8.528252759723792],[113.71973718663487,-8.524672277137954],[113.72185304948935,-8.50741938612915],[113.72046960527209,-8.501071975746713],[113.70728599785447,-8.492364114584129],[113.69874107020338,-8.493584747324213],[113.68897546235232,-8.496840168529314],[113.67261804171423,-8.49480568048999],[113.65845787981351,-8.484958602128051],[113.64047284947297,-8.458591372441091],[113.6279403030362,-8.453220347942828],[113.59693444524565,-8.447035468109142],[113.59058678492237,-8.442071221028124],[113.57911217040302,-8.428806190369006],[113.57300865249914,-8.425957846930508],[113.54086348650503,-8.43059673217618],[113.52719159039023,-8.429294383395453],[113.49048913517193,-8.408379893610299],[113.48389733386632,-8.402032182485794],[113.47885177045464,-8.39470808527229],[113.47242272758896,-8.382094078495859],[113.46656333842014,-8.377536608717115],[113.4460555305752,-8.37558353613449],[113.4294539734326,-8.384047151072286],[113.41358483216652,-8.390232031098662],[113.39519290635852,-8.38128022314849],[113.34595788863285,-8.32415142242362],[113.32309003672133,-8.309258680253649],[113.28199303542488,-8.292087503421785],[113.24073326638998,-8.280938375637465],[113.19792727035414,-8.277276176608579],[113.07007898347793,-8.292413165745248],[113.02670331617858,-8.302992384406487],[112.98731531099693,-8.323500398212916],[112.93677819235302,-8.38128022314849],[112.90267988171027,-8.403985255043176],[112.87061608777954,-8.391778326208955],[112.85743247708244,-8.392673296702608],[112.83383222820451,-8.375746367289716],[112.8297632183518,-8.38128022314849],[112.82634524255168,-8.39006919994457],[112.81788171152073,-8.396579742259922],[112.80787195253882,-8.398858477129359],[112.79908288344406,-8.395196278306942],[112.7898055253517,-8.387871880642468],[112.78419030149746,-8.386814078992343],[112.76921634644287,-8.395196278306942],[112.755137558157,-8.407972815728648],[112.74781334070164,-8.41285564731756],[112.733164902434,-8.417657063318758],[112.71680748324223,-8.419121942832302],[112.7019149193002,-8.422295948583514],[112.69044030802802,-8.429864292423716],[112.67269941921107,-8.447035468109142],[112.656260609972,-8.43645594975991],[112.61215253798855,-8.416436430532135],[112.57341555464355,-8.410088719432858],[112.5206811917616,-8.391778326208955],[112.44239343075762,-8.391778326208955],[112.42652429060702,-8.387627934337521],[112.41358482908225,-8.379082903836986],[112.39869226063146,-8.371758806541436],[112.37663820696811,-8.371270313074717],[112.38135827679746,-8.36142353453522],[112.38404381118337,-8.357598504489477],[112.36622155447074,-8.341973623199811],[112.34156334159229,-8.3326961527238],[112.31592859301612,-8.32903425421077],[112.2952579980462,-8.329766393572696],[112.28451581559503,-8.3326961527238],[112.25782311754432,-8.343357087188451],[112.24439538346581,-8.341973623199811],[112.23755944399943,-8.338474255434658],[112.23308351912426,-8.333916785560078],[112.22706138305294,-8.329766393572696],[112.20899498098571,-8.323662928945732],[112.02475018715786,-8.30494545705697],[112.00269616602081,-8.297784190663105],[111.97071374488992,-8.277764670097117],[111.96119225401235,-8.278252863159059],[111.93620853050068,-8.294854431463591],[111.93165123452513,-8.299574432157206],[111.92725670904252,-8.302504191350206],[111.9186304002259,-8.302992384406487],[111.89869226276834,-8.296482142225258],[111.87476646376096,-8.273858224318156],[111.85987390200073,-8.26881286166733],[111.83375084821688,-8.27068451876735],[111.82243900599809,-8.26881286166733],[111.81128990967674,-8.264418222807151],[111.80152428451007,-8.258884366641555],[111.79200278991276,-8.256524216038061],[111.7814233644449,-8.261407047980027],[111.77100670030315,-8.281507984279958],[111.7722274079081,-8.301690335971847],[111.77035565372397,-8.317315217561388],[111.75066166587654,-8.323500398212916],[111.74659263418228,-8.318047657353866],[111.74187259825176,-8.306084974755475],[111.73536217137296,-8.294040576082294],[111.72608483646046,-8.288750966735995],[111.71729576804498,-8.292738527642157],[111.71192466610573,-8.302178529028305],[111.70573979087217,-8.323500398212916],[111.70248457375186,-8.327406543474153],[111.69678795169706,-8.336846544705395],[111.69483482146556,-8.346367961472813],[111.70923912275612,-8.354099136750609],[111.7112736279766,-8.361016456644256],[111.70753014358475,-8.368096607670662],[111.69581138402886,-8.371270313074717],[111.67335044834823,-8.367852360936896],[111.65406333537119,-8.358086697532947],[111.63917076254423,-8.34303142487286],[111.63054447786483,-8.323500398212916],[111.62370854086416,-8.323500398212916],[111.61255944122222,-8.337009375863685],[111.5958765036645,-8.334405279035575],[111.56169680112222,-8.316664193348545],[111.54802493705698,-8.315606391662227],[111.5328882156142,-8.326592688105373],[111.51783286812207,-8.329766393572696],[111.44874108572665,-8.312920879227548],[111.44166100046151,-8.296807504121556],[111.44353273736861,-8.284844520977044],[111.44206790090165,-8.276055543739721],[111.42505944896965,-8.26881286166733],[111.4174910777387,-8.269138223567813],[111.39991296506044,-8.274346717807482],[111.39039148150682,-8.275079157614755],[111.3841252013198,-8.272881838192184],[111.37240644567805,-8.264418222807151],[111.36304771347694,-8.261407047980027],[111.3115340414809,-8.261407047980027],[111.30062909894461,-8.2629533431851],[111.29493249297492,-8.260430661848421],[111.28419029797696,-8.251234606599551],[111.27613365244248,-8.248304847336643],[111.26579837498403,-8.249281533900215],[111.25700929951623,-8.25302484813243],[111.25318443369102,-8.257989095664465],[111.17123457929588,-8.282647501990969],[111.16195723392704,-8.281915062186277],[111.15821373921243,-8.272067982802515],[111.1554468119576,-8.261000270496334],[111.14828535679447,-8.253513341626451],[111.1384383462592,-8.249200118317717],[111.12720787553381,-8.247735238685397],[111.11475671817135,-8.241957436155442],[111.1111759770231,-8.229180597301514],[111.10971113630315,-8.215427372221441],[111.10303794827914,-8.206800925445554],[111.09555096836039,-8.20818438952119],[111.09083093001396,-8.215508787805172],[111.08716882399825,-8.22527445186167],[111.08236738954616,-8.233493820649853],[111.07276451409732,-8.247002798868849],[111.06666099926255,-8.252536655064802],[111.05827883870475,-8.254652558925763],[111.01734459370593,-8.254652558925763],[110.99822025670328,-8.250176804880905],[110.94435015507213,-8.22637221031778],[110.94442224122946,-8.226112641815902],[110.94566246368144,-8.218826097307122],[110.96023523202167,-8.16994039498869],[110.96090702732599,-8.164514391705257],[110.96126875262192,-8.15660776666597],[110.95961511555261,-8.134283672991382],[110.96126875232957,-8.126325374485749],[110.96519615806764,-8.116868548464275],[110.98033736035744,-8.100177151301281],[110.99971602642788,-8.0840024876428],[111.03640628641014,-8.060386258769707],[111.09924483278883,-8.008503197561687],[111.14916426718428,-7.9780657833912105],[111.17655275799405,-7.966903435314435],[111.19246911558781,-7.958066989471261],[111.21696373561231,-7.9399801099143845],[111.22802250099929,-7.938119868756648],[111.23530886478379,-7.941013577223641],[111.2440938568605,-7.946336234286177],[111.25303388312118,-7.950625424032535],[111.26336916637186,-7.951245504415491],[111.27329104546321,-7.945199420248357],[111.28026736856485,-7.939205009432166],[111.2846598625201,-7.9043750578673055],[111.30140303949175,-7.860915353118361],[111.30791426089488,-7.837815855808],[111.31023969359613,-7.798541692797929],[111.30781089745793,-7.784330615207653],[111.30109296556766,-7.77332358683418],[111.29106774946054,-7.760301297027023],[111.26460940914234,-7.731724121271866],[111.25396405725095,-7.723145741066426],[111.24249190809809,-7.718856851380529],[111.20786868971564,-7.715549455288132],[111.19060875384065,-7.707436135363547],[111.18802493894475,-7.690486368688543],[111.187508164983,-7.672554507446816],[111.18564782618024,-7.6643898144575076],[111.1821338133248,-7.657878368886178],[111.18239220053584,-7.6516772639527035],[111.18688806300906,-7.643512570905611],[111.21215783437792,-7.624288875093088],[111.21748050949952,-7.613333519479216],[111.20606000846956,-7.600569295385946],[111.19763676101171,-7.582637734031151],[111.18497602460361,-7.5291008153589765],[111.2019775711153,-7.404974010606002],[111.20239098926068,-7.385492096710323],[111.19805016719204,-7.35536471627187],[111.19737836757983,-7.308597456953767],[111.20332116246274,-7.266791291873919],[111.22027103284636,-7.251391724253303],[111.24600589655466,-7.256300995499882],[111.26388593675223,-7.265292613730813],[111.27814863703483,-7.269168417422967],[111.28931074748452,-7.268858377161872],[111.29757896803861,-7.2657060007459915],[111.30605390918757,-7.264155799438842],[111.31318526037938,-7.266067864597533],[111.32589765983968,-7.2742843821541525],[111.34181399965051,-7.282190859433139],[111.40382572215815,-7.304256743127836],[111.44428836086283,-7.311232949358006],[111.44382327288898,-7.298520547706367],[111.44651045428759,-7.291699361582204],[111.45457197444875,-7.2798654072688365],[111.45984297524451,-7.273767648386316],[111.46480390916872,-7.269323437553513],[111.47276208316345,-7.263484045538894],[111.49415612666168,-7.250719970351128],[111.52164798889379,-7.230359458017052],[111.53596236059352,-7.217595382722038],[111.55120689992111,-7.199250131952266],[111.59161786856092,-7.163903438426448],[111.60830935584848,-7.153981548946885],[111.6102213934675,-7.146488608656853],[111.60898115183379,-7.135584774731082],[111.59942101796376,-7.093261874084056],[111.59812910414418,-7.081427919200873],[111.60195315702639,-7.0468046520329235],[111.59849083379672,-6.960763367027043],[111.60350345326115,-6.933995053734603],[111.62097008915838,-6.844388153306137],[111.62159020902826,-6.825991377937255],[111.62934166535578,-6.800101361275913],[111.66851240618293,-6.737572963653076],[111.67269941134333,-6.733656451728893]]],[[[115.57064863057592,-6.904554896037107],[115.57227623900836,-6.93059662766929],[115.55713952357621,-6.940036783519293],[115.51270592165042,-6.938734584283067],[115.50318443629253,-6.936618679513523],[115.48316490662862,-6.927341354892254],[115.46705162667325,-6.9239234010915505],[115.45484460097504,-6.917575836975769],[115.45118248693419,-6.914646076447992],[115.44410240689226,-6.910088754631222],[115.43897545340582,-6.911797731536313],[115.4340926467759,-6.918226861489873],[115.42579185980598,-6.920098519414154],[115.41911868676127,-6.925062769096459],[115.41309655076125,-6.925062769096459],[115.40512129173429,-6.92164481529428],[115.40040124310262,-6.9169248124615885],[115.39429772445908,-6.912693002904142],[115.38233483013529,-6.9108211947639555],[115.35043379144882,-6.9275041861271465],[115.34473717531831,-6.928155210640042],[115.34815514498989,-6.940606392413368],[115.35661868605791,-6.945407810841941],[115.36784915091891,-6.947686396628856],[115.37891686586465,-6.952406549647122],[115.39096113122756,-6.961195530735297],[115.39600670574352,-6.96607836476143],[115.40064537564244,-6.972914272304774],[115.37826581720938,-6.987399943101833],[115.3553166028158,-6.982028915823637],[115.31739342786312,-6.952406549647122],[115.3032332677445,-6.96607836476143],[115.30103600185058,-6.972263247797553],[115.30054772500212,-6.9779599375528605],[115.30152428210972,-6.981215060084412],[115.30323327276189,-6.980401354558396],[115.30355879407547,-6.985935213071381],[115.31137129212998,-6.995538049837893],[115.31055749104657,-7.000746396082154],[115.3060001979932,-7.004164349831117],[115.2994897846118,-7.007012694691182],[115.2933048849389,-7.007582303577688],[115.29078209413828,-7.0040015185986935],[115.28711998688348,-7.003024981843968],[115.26563561631447,-6.983493796068556],[115.26531008819848,-6.976006713819591],[115.27588951565728,-6.938734584283067],[115.23804772243294,-6.942315369308575],[115.2214461548591,-6.939711121050286],[115.21436608231791,-6.928155210640042],[115.2185164740507,-6.904392215014813],[115.22877037847331,-6.891534105280381],[115.24203535517248,-6.880954731544445],[115.25538171153221,-6.86305110661626],[115.2443140016448,-6.846449530676667],[115.25505618916773,-6.838148742688919],[115.2757267620091,-6.83538181335704],[115.29493248806794,-6.835625910000088],[115.37924238819808,-6.834730788833268],[115.46078535243026,-6.842543233327042],[115.48357181556617,-6.851657877067603],[115.55347740818668,-6.889418200492147],[115.57064863057592,-6.904554896037107]]],[[[112.70069420587357,-5.726006749830189],[112.71469160294257,-5.736097931020171],[112.7270613953083,-5.747328405205993],[112.73617597596544,-5.763116126469697],[112.7404077492749,-5.787367467543909],[112.73853600566788,-5.809991172117482],[112.73145592475072,-5.828383066803835],[112.71876061447867,-5.8415666898467915],[112.700694208366,-5.848809525939083],[112.69109133997704,-5.84954189102552],[112.66391035411381,-5.848321257512587],[112.65837649578306,-5.845391496740416],[112.65479576845298,-5.837172123796279],[112.64625084757974,-5.839288028750397],[112.63054446836512,-5.848809525939083],[112.60425866125978,-5.847426061177364],[112.59620202023589,-5.8360328308015585],[112.5934350911534,-5.817315348719451],[112.58277428456914,-5.794203375713645],[112.5900985036383,-5.7855770748775734],[112.61801191345255,-5.763441638752925],[112.62110436121617,-5.757907779725376],[112.64535566552289,-5.732110292896578],[112.65707441497564,-5.736748955585724],[112.67017662956748,-5.733493757651452],[112.68458092527233,-5.727959898632541],[112.70069420587357,-5.726006749830189]]],[[[114.04566490894709,-6.914646076447992],[114.06568444100441,-6.9226213520646525],[114.0935360954734,-6.932656803300999],[114.10979031788291,-6.946898077147826],[114.12480135911053,-6.98161027131549],[114.09668590856239,-6.982878672544932],[114.0511042379131,-7.011430918892566],[113.98113040545566,-7.020684509654897],[113.95556835926845,-7.044948616340817],[113.93558346314266,-7.04991421781811],[113.90997853633493,-7.048063139166576],[113.89187473095996,-7.05922549041696],[113.87065451122778,-7.095177093801101],[113.88625582508243,-7.099515554650463],[113.89499926110183,-7.10943203657593],[113.89535566767583,-7.120538057683054],[113.87281335012887,-7.12883884519938],[113.83253315757113,-7.132019762249898],[113.77671570570175,-7.125256107542044],[113.70624848660823,-7.113613374288529],[113.68666778157362,-7.112641944809531],[113.66521243447234,-7.110039949843972],[113.64532689630937,-7.131133954361643],[113.61005227694291,-7.129187039651841],[113.59337868075822,-7.138901033968597],[113.58276663426875,-7.153486445880122],[113.57728379765048,-7.16836777795938],[113.5704463771879,-7.181895988506775],[113.56588242528682,-7.193622540598377],[113.5594892646124,-7.212117403847352],[113.54898420660429,-7.233778162653233],[113.53394127538044,-7.240101692197232],[113.51342533836215,-7.247781497667751],[113.50705780867094,-7.240109503289134],[113.4952134075892,-7.23063675178045],[113.47247064674433,-7.222049958331551],[113.42269941333561,-7.2267391671207335],[113.26905358172839,-7.217461843092308],[113.25123131962694,-7.209649399213169],[113.23438561773449,-7.207614910181867],[113.18653404941224,-7.223321213545048],[113.16553795748419,-7.219903259966448],[113.15870201528602,-7.185235230343962],[113.15316816516622,-7.177422786403133],[113.1463322274758,-7.1715634158845685],[113.14576256917492,-7.165785460971046],[113.1587020199834,-7.15846121024784],[113.15870201533829,-7.151055543898347],[113.14600671119989,-7.149590813920261],[113.12232506540748,-7.139418218393553],[113.11426842629669,-7.141208610830177],[113.1096297521908,-7.151462471752903],[113.1097111320153,-7.171482000271385],[113.10336347966765,-7.1788876665848225],[113.1163843155146,-7.190687823205798],[113.135264522288,-7.202732076417278],[113.148692256055,-7.214776329593072],[113.14503014233976,-7.2267391671207335],[113.12794030347767,-7.231052391998856],[112.8181258426921,-7.161390820410671],[112.77808678598004,-7.15846121024784],[112.74252362969492,-7.161390820410671],[112.72641035237733,-7.158786722488245],[112.71989994067629,-7.147881837100765],[112.71705162669234,-7.117608297279026],[112.71876061594594,-7.103285458114097],[112.72730553969274,-7.089532227779366],[112.71989993489598,-7.082777585805126],[112.70997155087947,-7.097344671879897],[112.70134524555252,-7.092054910128606],[112.6949975875346,-7.076104359435726],[112.6926375624279,-7.058526247448164],[112.69450931180715,-7.038995061899106],[112.7009383427439,-7.0332983722153095],[112.71363365987004,-7.032403251082254],[112.73414147702991,-7.028090176219523],[112.76351972695414,-7.011000257321829],[112.7926538417273,-6.9840634049577845],[112.84400475474423,-6.925062769096459],[112.8419702496214,-6.908868121218692],[112.87322024668944,-6.897718988404364],[112.91529382024693,-6.891696936516367],[112.94402103303489,-6.890964496381064],[112.9817000684512,-6.891290008639725],[113.06739342038234,-6.8810359969492545],[113.14601986613715,-6.894371184203947],[113.27335673350484,-6.892996281711021],[113.44558230427678,-6.882378002728629],[113.52622788500808,-6.89629301338445],[113.67205189155214,-6.879398972213715],[113.79311279044295,-6.882479096291342],[113.92367597329672,-6.864841348941008],[113.96802819233392,-6.870538038811604],[113.9899194705029,-6.877862289973917],[114.00961347446591,-6.886976783444222],[114.02800540131288,-6.899021037437304],[114.04566490894709,-6.914646076447992]]],[[[114.59376061564951,-7.130547822026445],[114.6047469460617,-7.130629237640405],[114.61459394318592,-7.132093967624968],[114.6218367830273,-7.137302313714133],[114.6245223367553,-7.147881837100765],[114.62305748803166,-7.163262628451382],[114.6188257123079,-7.167250190943509],[114.53272545799531,-7.15846121024784],[114.51124108674647,-7.159275065955463],[114.50017336909094,-7.158298379020964],[114.4953719436786,-7.154717744374614],[114.49634850056738,-7.143812708763378],[114.49919681586307,-7.137872072797651],[114.50464928845007,-7.1343727035347255],[114.54102623382776,-7.11858483400949],[114.5500594373962,-7.116875857177717],[114.55909264417268,-7.119073177481275],[114.5813094397971,-7.128350501728663],[114.59376061564951,-7.130547822026445]]],[[[114.36925548396962,-7.089582699451955],[114.38306849020736,-7.113356809954219],[114.39685523099348,-7.131462320657016],[114.39465789765785,-7.15756488743343],[114.39185631869806,-7.1788876665848225],[114.37826582243278,-7.17815522649406],[114.35726972722134,-7.16741302217003],[114.33179771874721,-7.159356331355604],[114.32520592237177,-7.147637590259852],[114.30655822090893,-7.148779211410395],[114.29282202063965,-7.143151319561873],[114.28476081418415,-7.126164747854635],[114.27324774804116,-7.101247363912208],[114.26976204337392,-7.080834877046764],[114.29482566741656,-7.0546659155331914],[114.32225454934982,-7.050030933562006],[114.34294680722407,-7.055759318234361],[114.35775149324004,-7.069202508395743],[114.36925548396962,-7.089582699451955]]],[[[115.89087975791087,-7.107110339646257],[115.89429772549217,-7.111586245663081],[115.89600670686428,-7.124932548072102],[115.89429771710537,-7.164483261798088],[115.8757430355535,-7.1857235738080885],[115.83773848006317,-7.1971982181720815],[115.79590904514666,-7.19003664851664],[115.75733482796015,-7.169691607847547],[115.74301190997868,-7.150323103802712],[115.75294029510383,-7.140313339505312],[115.76221764401076,-7.13909270615166],[115.7659611354797,-7.143975539990802],[115.76986738354577,-7.142185147555311],[115.77816816124644,-7.11549239258897],[115.78598066563687,-7.115980736061137],[115.79127038013795,-7.125664988172062],[115.79476973191805,-7.137872072797651],[115.80103600625057,-7.146416956908274],[115.80795332216769,-7.149834910547762],[115.82276452078597,-7.149509398306657],[115.84278404721242,-7.1576473545400265],[115.87012780111843,-7.159844674822759],[115.88021894700694,-7.15846121024784],[115.88379967508375,-7.1532528641844895],[115.88135826970243,-7.152927351943651],[115.87517337253566,-7.153578376425301],[115.8693953825293,-7.147149397004595],[115.86670983000593,-7.137302313714133],[115.86963951716679,-7.128676013971384],[115.87745201631591,-7.123467667871812],[115.88355553664354,-7.1239560113430755],[115.88599694545955,-7.129571285298666],[115.88697350085089,-7.126560109286671],[115.88900801387777,-7.113702150355033],[115.89087975791087,-7.107110339646257]]]]},"type":"Feature","properties":{"source":"https://simplemaps.com","id":"IDJI","name":"Jawa Timur"},"id":5},{"geometry":{"type":"MultiPolygon","coordinates":[[[[111.67269941134333,-6.733656451728893],[111.66851240618293,-6.737572963653076],[111.62934166535578,-6.800101361275913],[111.62159020902826,-6.825991377937255],[111.62097008915838,-6.844388153306137],[111.60350345326115,-6.933995053734603],[111.59849083379672,-6.960763367027043],[111.60195315702639,-7.0468046520329235],[111.59812910414418,-7.081427919200873],[111.59942101796376,-7.093261874084056],[111.60898115183379,-7.135584774731082],[111.6102213934675,-7.146488608656853],[111.60830935584848,-7.153981548946885],[111.59161786856092,-7.163903438426448],[111.55120689992111,-7.199250131952266],[111.53596236059352,-7.217595382722038],[111.52164798889379,-7.230359458017052],[111.49415612666168,-7.250719970351128],[111.47276208316345,-7.263484045538894],[111.46480390916872,-7.269323437553513],[111.45984297524451,-7.273767648386316],[111.45457197444875,-7.2798654072688365],[111.44651045428759,-7.291699361582204],[111.44382327288898,-7.298520547706367],[111.44428836086283,-7.311232949358006],[111.40382572215815,-7.304256743127836],[111.34181399965051,-7.282190859433139],[111.32589765983968,-7.2742843821541525],[111.31318526037938,-7.266067864597533],[111.30605390918757,-7.264155799438842],[111.29757896803861,-7.2657060007459915],[111.28931074748452,-7.268858377161872],[111.27814863703483,-7.269168417422967],[111.26388593675223,-7.265292613730813],[111.24600589655466,-7.256300995499882],[111.22027103284636,-7.251391724253303],[111.20332116246274,-7.266791291873919],[111.19737836757983,-7.308597456953767],[111.19805016719204,-7.35536471627187],[111.20239098926068,-7.385492096710323],[111.2019775711153,-7.404974010606002],[111.18497602460361,-7.5291008153589765],[111.19763676101171,-7.582637734031151],[111.20606000846956,-7.600569295385946],[111.21748050949952,-7.613333519479216],[111.21215783437792,-7.624288875093088],[111.18688806300906,-7.643512570905611],[111.18239220053584,-7.6516772639527035],[111.1821338133248,-7.657878368886178],[111.18564782618024,-7.6643898144575076],[111.187508164983,-7.672554507446816],[111.18802493894475,-7.690486368688543],[111.19060875384065,-7.707436135363547],[111.20786868971564,-7.715549455288132],[111.24249190809809,-7.718856851380529],[111.25396405725095,-7.723145741066426],[111.26460940914234,-7.731724121271866],[111.29106774946054,-7.760301297027023],[111.30109296556766,-7.77332358683418],[111.30781089745793,-7.784330615207653],[111.31023969359613,-7.798541692797929],[111.30791426089488,-7.837815855808],[111.30140303949175,-7.860915353118361],[111.2846598625201,-7.9043750578673055],[111.28026736856485,-7.939205009432166],[111.27329104546321,-7.945199420248357],[111.26336916637186,-7.951245504415491],[111.25303388312118,-7.950625424032535],[111.2440938568605,-7.946336234286177],[111.23530886478379,-7.941013577223641],[111.22802250099929,-7.938119868756648],[111.21696373561231,-7.9399801099143845],[111.19246911558781,-7.958066989471261],[111.17655275799405,-7.966903435314435],[111.14916426718428,-7.9780657833912105],[111.09924483278883,-8.008503197561687],[111.03640628641014,-8.060386258769707],[110.99971602642788,-8.0840024876428],[110.98033736035744,-8.100177151301281],[110.96519615806764,-8.116868548464275],[110.96126875232957,-8.126325374485749],[110.95961511555261,-8.134283672991382],[110.96126875262192,-8.15660776666597],[110.96090702732599,-8.164514391705257],[110.96023523202167,-8.16994039498869],[110.94566246368144,-8.218826097307122],[110.94442224122946,-8.226112641815902],[110.94435015507213,-8.22637221031778],[110.93100020516738,-8.220473035422408],[110.84791101260713,-8.201104538392325],[110.843559790287,-8.200842566475371],[110.84354984559664,-8.200739520182346],[110.83703860073854,-8.13324990533881],[110.83135419684706,-8.13237145819632],[110.82484296445402,-8.132888191809595],[110.81802167622965,-8.137694114834035],[110.8108386469992,-8.138934275502852],[110.80241539528858,-8.132268111473646],[110.79874637122525,-8.121674471522239],[110.79280359250826,-7.947059961827421],[110.78753258134746,-7.92018800915437],[110.78660240973264,-7.873627602237759],[110.7847420604507,-7.862878941065954],[110.78133141107543,-7.854042194437089],[110.77306318370333,-7.843448553287477],[110.75332279008208,-7.832596545257521],[110.70521204061522,-7.8253102999874375],[110.68924400296126,-7.819780648778836],[110.65369062604636,-7.8229846980108935],[110.63312341471415,-7.820969436665947],[110.57865645432852,-7.820969436665947],[110.536901879972,-7.809858761278023],[110.50661949697702,-7.783090454362494],[110.49028974676398,-7.757097247721443],[110.47447676438533,-7.720252032363411],[110.44130049087978,-7.568943389108124],[110.43768313624332,-7.56005496819761],[110.41122480522233,-7.589923979918706],[110.30130904156805,-7.669144064986677],[110.28709801227382,-7.681597948137114],[110.26715091158962,-7.706764381554054],[110.2587793363768,-7.715291088439085],[110.25567874160775,-7.712190385822032],[110.25319828763966,-7.703663979354334],[110.25040774268035,-7.677257084592207],[110.24596356807673,-7.672451160705658],[110.2404341929504,-7.671934426999804],[110.23459476625528,-7.674466722584156],[110.2282902371692,-7.675551863365394],[110.21960859733738,-7.675396843253803],[110.1590438082114,-7.667593563440521],[110.13651288829274,-7.676792024257714],[110.13000165994097,-7.686300525267924],[110.12659100913524,-7.698082654533285],[110.12834802528529,-7.7242828556255185],[110.12524741956065,-7.744074657411726],[110.11666914451062,-7.76159313125138],[110.06494103673353,-7.837247448765299],[110.04917971163174,-7.855437375351016],[110.04618248253209,-7.864739182278129],[110.0427718438298,-7.888872146681913],[110.0427395535514,-7.889100470859515],[110.03419031059364,-7.884698320626878],[109.93189538711408,-7.854913131015464],[109.90601648069395,-7.837660535278911],[109.88306724894231,-7.844821803068531],[109.84742272175062,-7.836683848547343],[109.81177818641314,-7.823418814385696],[109.75245202284677,-7.811944322445931],[109.65674890173032,-7.781670938859514],[109.48609458877294,-7.761813944775734],[109.44678796680593,-7.772068104229369],[109.42628013371568,-7.774183708082373],[109.4172469429859,-7.764906535820857],[109.41472415418637,-7.757907798591602],[109.40853925299244,-7.754978038736628],[109.40170332749099,-7.752618188071869],[109.3966577454582,-7.747491108313896],[109.39722740475919,-7.741875835377088],[109.40455163081091,-7.731052367468109],[109.40349369137762,-7.726332365669838],[109.39763431497866,-7.72283299700927],[109.36882570930648,-7.713474108551136],[109.19723357725144,-7.69621670510338],[109.09814586227819,-7.686861121250693],[109.04655524444235,-7.701853308416966],[109.0329696033641,-7.720147483917679],[109.02125083635725,-7.732028753810727],[109.01441491687424,-7.732598663008082],[108.98389732282848,-7.707207811170704],[108.9736434331158,-7.702243862958077],[108.96159914808366,-7.700371904999478],[108.93897546498994,-7.699476934246571],[108.91830488189375,-7.69638434312981],[108.90154056357392,-7.6896298525337015],[108.8896590545891,-7.678643553224634],[108.88160241886062,-7.632501035591972],[108.87322024232286,-7.610609551685238],[108.85865318421742,-7.614027504876878],[108.8520613862069,-7.618828922459257],[108.82748456986653,-7.630791908793801],[108.8204858771252,-7.637872061934245],[108.80697674911205,-7.658135534034048],[108.7990014995391,-7.664727493926627],[108.74155928897645,-7.617622709746091],[108.73690839103826,-7.612248078248725],[108.73360110975713,-7.604600118812043],[108.733807809722,-7.590750753870642],[108.73608157281586,-7.580622172091052],[108.74155928024335,-7.563930771559278],[108.74228275766676,-7.5518386015328405],[108.74155928845911,-7.536542381916189],[108.72140547619706,-7.463988609386999],[108.71639285960045,-7.421407195287623],[108.71282718496737,-7.40626599519229],[108.70972660187648,-7.398049477932009],[108.70466230962411,-7.390969774905598],[108.69298343451642,-7.386163850588071],[108.68269982679831,-7.3830632978610184],[108.6754134429155,-7.379600881290833],[108.67076257027318,-7.357690168388794],[108.66817874269704,-7.344202516047148],[108.66177086960425,-7.340378536021751],[108.65029870049487,-7.340533556149358],[108.62642418791859,-7.348336686536365],[108.61593387282828,-7.345907887661858],[108.6107145516498,-7.33862149102858],[108.60254967678667,-7.322963556820345],[108.57888187483555,-7.317020818136168],[108.55304365492505,-7.309992788327205],[108.54689416291846,-7.278780266357908],[108.57071699322906,-7.2012138705199895],[108.5725773436529,-7.178734599223785],[108.57567793115025,-7.163180011131576],[108.58353274581562,-7.151139362924864],[108.59541833085464,-7.142096071062784],[108.61371178912712,-7.13667006589369],[108.63164350518836,-7.135791468245254],[108.66952232896526,-7.1411658000369815],[108.69546390281877,-7.139822292196322],[108.70714277402948,-7.1354297545954335],[108.71716800131158,-7.130210442932396],[108.74372969253815,-7.111348608205782],[108.75701053786003,-7.098171145517131],[108.76946455526051,-7.083443331201762],[108.7811434217872,-7.072642843878566],[108.78899824349229,-7.061325772949051],[108.7931840381124,-7.0476832496988395],[108.79054854094251,-7.029596515325022],[108.7894633324895,-7.000037539452649],[108.79612958683747,-6.950583110208742],[108.80067711519135,-6.934770154445797],[108.82315636700186,-6.895599478498911],[108.89297122171408,-6.815707623892688],[108.89512033574292,-6.814154568384125],[108.89519290502845,-6.814222915444422],[108.90357506703694,-6.822198191203329],[108.9118758458373,-6.834893469857558],[108.92302493761271,-6.8446591381328705],[108.94483483046069,-6.84937914102715],[108.96892337085679,-6.848321188625208],[108.98340904695577,-6.8417293775666606],[108.9907332652127,-6.8278947309026625],[108.99268639697293,-6.805352518503694],[109.00131269984747,-6.789157870286104],[109.02084394585857,-6.788669526782882],[109.04151451920217,-6.795586850164008],[109.0534774122216,-6.801527636746288],[109.09205162880752,-6.831475515999986],[109.11548913372577,-6.838555670569364],[109.14283287556997,-6.85621504871914],[109.15040123803078,-6.857028904477486],[109.17693118256894,-6.85621504871914],[109.35189863384248,-6.875664969562219],[109.43824303461639,-6.860121346059464],[109.49293053723055,-6.801527636746288],[109.53199303103604,-6.835137566500644],[109.72559655431472,-6.86305110661626],[109.89633222964271,-6.918226861489873],[109.94068444451567,-6.92343520781314],[109.98389733200426,-6.9226213520646525],[110.11426842287945,-6.903903871521336],[110.13884525012135,-6.897149379505695],[110.1495874329818,-6.887302295703113],[110.15284264068266,-6.8817684370858805],[110.16976973010894,-6.860935201817238],[110.17750084353749,-6.85621504871914],[110.18832441918079,-6.860284177296354],[110.19206790510898,-6.869805598673516],[110.1935327458211,-6.881117412567413],[110.19800866063703,-6.890883080763071],[110.21257572160039,-6.89999772442511],[110.25879967780222,-6.920993790780595],[110.29297936288076,-6.9312476521818045],[110.33464603203903,-6.96135836196912],[110.35572350078921,-6.972914272304774],[110.3810327449367,-6.975681201566197],[110.39909915561081,-6.96786875726496],[110.41504967392667,-6.957452064702305],[110.43458092774185,-6.952406549647122],[110.45606530028925,-6.950941669393195],[110.47242272032891,-6.946384347607887],[110.48617598014013,-6.9379208787502575],[110.52702883766186,-6.895196155742198],[110.57154381260993,-6.836195518904977],[110.64470462146798,-6.688164948085167],[110.65739993435727,-6.64397549323547],[110.66325931069213,-6.606052337150471],[110.66480553585015,-6.565362251448106],[110.66968834628244,-6.546319257625018],[110.67847740976596,-6.534600515284943],[110.68189538089418,-6.521905236101813],[110.6710718066995,-6.499932481484455],[110.69166100614376,-6.496026334162359],[110.70199629010096,-6.4887020826092705],[110.71876060850104,-6.465752791084559],[110.73047936358539,-6.456963809364955],[110.78109784869129,-6.436455934969145],[110.80811608180164,-6.431735931819532],[110.8181258432921,-6.428155146537837],[110.83375084618402,-6.420668213905206],[110.8422957724685,-6.418064115671276],[110.90316816859334,-6.410821279688448],[110.92481529880072,-6.403741124734388],[110.93409264483151,-6.411065376344726],[110.96176191399371,-6.427911049881928],[110.9725041018014,-6.431735931819532],[110.99219810948556,-6.432305540754255],[111.00245201489454,-6.4312475882945295],[111.00684655067367,-6.428317977784001],[111.01075279863835,-6.420993726184413],[111.0192977258794,-6.4263649041099],[111.02670332425758,-6.435316717100094],[111.02784264686808,-6.4384091588548396],[111.04086347930654,-6.447360971835391],[111.05176842836686,-6.456719712709669],[111.05925540074898,-6.46990318528665],[111.06544029898691,-6.50937263793305],[111.08236738257283,-6.54387784045431],[111.11931400122268,-6.649672183300946],[111.13705488459895,-6.6854794343093245],[111.14437910637022,-6.691827148880876],[111.15056399559931,-6.692966366716201],[111.15691165651506,-6.692071245529419],[111.34253991264767,-6.712823215957151],[111.36638431017123,-6.712009360179976],[111.40805097902881,-6.701755498403385],[111.42872154677279,-6.6991512500399475],[111.44410241422608,-6.68906021948578],[111.47779381815928,-6.640313442629243],[111.49341882006878,-6.623467769476672],[111.51986738443273,-6.639906514736585],[111.57699629098995,-6.650974232385017],[111.6101180316128,-6.664971560451144],[111.62142988857897,-6.674574547954293],[111.6546330106783,-6.716241169878882],[111.67269941134333,-6.733656451728893]]],[[[109.01929772617802,-7.758070629789358],[109.02369226338337,-7.762383853967033],[109.042735225044,-7.7614885828072],[109.0466414627799,-7.767998826435974],[109.04314213056834,-7.778904010226263],[109.03581791512815,-7.780368890141461],[109.02621504747218,-7.777520545908576],[108.99927818319695,-7.772881659360758],[108.94483482727017,-7.754327014371373],[108.88607831455678,-7.743910324080321],[108.87281334779286,-7.737237249196401],[108.85743247737322,-7.732028753810727],[108.81527753457648,-7.737725442366698],[108.80014082292038,-7.733819296148929],[108.79411869108046,-7.719415043944381],[108.79704838234407,-7.701592838580672],[108.80689538268913,-7.6862118994292725],[108.82154382058627,-7.678643553224634],[108.87387128571903,-7.703220249310541],[108.92505944445215,-7.710381817876033],[108.95777429135973,-7.720147483917679],[109.01099693858454,-7.750258036978544],[109.01929772617802,-7.758070629789358]]],[[[110.43132571618061,-5.837334879938376],[110.45923912817,-5.831638264751847],[110.46558678304153,-5.839532125410238],[110.46363366178235,-5.857110314510665],[110.44988040428301,-5.87444425674667],[110.4379988941333,-5.881036068276448],[110.43034915321883,-5.873711816553073],[110.42660566438414,-5.861504805457226],[110.42164147163214,-5.851332283696106],[110.42066490823296,-5.843682519694567],[110.43132571618061,-5.837334879938376]]]]},"type":"Feature","properties":{"source":"https://simplemaps.com","id":"IDJT","name":"Jawa Tengah"},"id":9},{"geometry":{"type":"MultiPolygon","coordinates":[[[[115.55014082494587,-8.666192363360524],[115.57309002788064,-8.671970164658841],[115.58915337902467,-8.695665398660674],[115.59774535649845,-8.718726131728696],[115.61573089382594,-8.739627399334319],[115.62420394301844,-8.768908761373389],[115.60694421227294,-8.786553706419065],[115.58887780544295,-8.807305661294382],[115.56080163435878,-8.799004879373834],[115.50538171058713,-8.760918920621164],[115.48878013998223,-8.740655158145916],[115.47461998687531,-8.736586182596028],[115.46827233526774,-8.7318661829636],[115.47136479209772,-8.723809647377456],[115.50700930190794,-8.678968898985776],[115.51758873612546,-8.670179923503508],[115.53505545195206,-8.673678389394428],[115.55014082494587,-8.666192363360524]]],[[[115.61915124261593,-8.288750966735995],[115.65251712703208,-8.3184547352532],[115.6910913353079,-8.344414888860788],[115.71420332646693,-8.375176758672806],[115.70093834211623,-8.419121942832302],[115.69068443486893,-8.429457214546403],[115.65845788932603,-8.45549908274822],[115.6399031899984,-8.466241131717956],[115.61548912566013,-8.492445530157008],[115.60482832940913,-8.501071975746713],[115.53370202462159,-8.506524415686947],[115.52295983629557,-8.5113258314617],[115.51596114599697,-8.534356524156914],[115.49878990629749,-8.548435108956246],[115.36402428504368,-8.59693775852906],[115.32260175505209,-8.623793179297863],[115.29078210817855,-8.658786851582464],[115.26880943654496,-8.699151246592368],[115.25391686753649,-8.7146135942963],[115.23170006919779,-8.72079847325546],[115.21241296172349,-8.72844823146848],[115.2031356134308,-8.747002868138729],[115.20533289155331,-8.769463949403997],[115.22055097038998,-8.788994971510622],[115.2280379532748,-8.78215906873399],[115.2234806612753,-8.778008677719054],[115.21436609302938,-8.761814191367156],[115.23243249153848,-8.7540016021743],[115.23796635459084,-8.772230876761807],[115.23552494150199,-8.819756834101],[115.22901452904362,-8.830254934708494],[115.21322676917114,-8.839939180104135],[115.19507896568318,-8.847100444455513],[115.18091880817818,-8.850518395719318],[115.1573999252171,-8.851820443777392],[115.13453209821931,-8.850762642390173],[115.11345463019936,-8.845391619034274],[115.09498132462363,-8.833672886005719],[115.09424890252588,-8.818454786018714],[115.1149194560101,-8.803399216590181],[115.15919029627703,-8.78215906873399],[115.17066492106858,-8.768731509783487],[115.18189538093316,-8.74635184407073],[115.18628991911753,-8.722344768098534],[115.1769311845286,-8.703383053354504],[115.17237389543736,-8.696547150249648],[115.15609785590716,-8.662041972077635],[115.14869224172779,-8.658135527056293],[115.13982179868826,-8.6553685995233],[115.13184653913275,-8.651950647884203],[115.10336348482964,-8.629652696722342],[115.09009850139404,-8.614841372417743],[115.08472740862177,-8.600355710269122],[115.07667076738132,-8.585137608314753],[115.0581160845044,-8.570733361507594],[115.02263430010824,-8.548923301952975],[114.95313561960266,-8.485121433274447],[114.92701255931043,-8.46746176447421],[114.79664147252805,-8.405450134566607],[114.75586998410327,-8.397718959481718],[114.63900801216151,-8.398614230399243],[114.60450279012119,-8.38648841668361],[114.57422935966113,-8.362481336198373],[114.5490828791495,-8.334242447877093],[114.4684350819685,-8.21851966226911],[114.44792727258398,-8.121840006535189],[114.4524031922733,-8.095147410438255],[114.4814559233948,-8.08953213826735],[114.50473067021339,-8.090427409311513],[114.51783287088776,-8.09970458037966],[114.52735435529189,-8.11353922175166],[114.53972414638842,-8.128024887309747],[114.5553491575809,-8.133884406147436],[114.57097414916416,-8.129489767020575],[114.59742273207894,-8.110609762735352],[114.61255943357331,-8.121840006535189],[114.63404382661138,-8.127211332293584],[114.67310631571308,-8.131036062317259],[114.6914168573484,-8.135023623507879],[114.85759524413466,-8.193129115810846],[114.8929142644566,-8.180271161516266],[114.98438562405204,-8.180433992686325],[115.02263431486317,-8.172621401201766],[115.06324302682896,-8.143242992627437],[115.13591555601403,-8.072849152851632],[115.17286218588562,-8.055352612276764],[115.19312584967831,-8.05510836550843],[115.21550541601097,-8.0595030047753],[115.23617597050792,-8.067966320502084],[115.25196374837824,-8.079522527288066],[115.26880943660927,-8.08945072267909],[115.33790122715651,-8.10377355721215],[115.50245202287927,-8.172621401201766],[115.53532962201021,-8.194593995479513],[115.5651147811691,-8.221612252738947],[115.61915124261593,-8.288750966735995]]]]},"type":"Feature","properties":{"source":"https://simplemaps.com","id":"IDBA","name":"Bali"},"id":32}]};
+const REGIONS = [{"id":"surabaya","name":"Kota Surabaya","lon":112.7378,"lat":-7.2575,"kota":true,"kw":["SURABAYA"]},{"id":"malang-k","name":"Kota Malang","lon":112.6304,"lat":-7.9797,"kota":true,"kw":["KOTA MALANG"]},{"id":"kediri-k","name":"Kota Kediri","lon":112.0089,"lat":-7.8149,"kota":true,"kw":["KOTA KEDIRI"]},{"id":"blitar-k","name":"Kota Blitar","lon":112.1602,"lat":-8.0954,"kota":true,"kw":["KOTA BLITAR"]},{"id":"madiun-k","name":"Kota Madiun","lon":111.5228,"lat":-7.6298,"kota":true,"kw":["KOTA MADIUN"]},{"id":"mojokerto-k","name":"Kota Mojokerto","lon":112.4337,"lat":-7.4724,"kota":true,"kw":["KOTA MOJOKERTO"]},{"id":"pasuruan-k","name":"Kota Pasuruan","lon":112.9075,"lat":-7.6449,"kota":true,"kw":["KOTA PASURUAN"]},{"id":"probolinggo-k","name":"Kota Probolinggo","lon":113.2151,"lat":-7.7543,"kota":true,"kw":["KOTA PROBOLINGGO"]},{"id":"batu","name":"Kota Batu","lon":112.5277,"lat":-7.8706,"kota":true,"kw":["BATU"]},{"id":"sidoarjo","name":"Kab. Sidoarjo","lon":112.7183,"lat":-7.4558,"kota":false,"kw":["SIDOARJO"]},{"id":"gresik","name":"Kab. Gresik","lon":112.6552,"lat":-7.1571,"kota":false,"kw":["GRESIK"]},{"id":"lamongan","name":"Kab. Lamongan","lon":112.4148,"lat":-7.1183,"kota":false,"kw":["LAMONGAN"]},{"id":"tuban","name":"Kab. Tuban","lon":111.9032,"lat":-6.8997,"kota":false,"kw":["TUBAN"]},{"id":"bojonegoro","name":"Kab. Bojonegoro","lon":111.8814,"lat":-7.1509,"kota":false,"kw":["BOJONEGORO"]},{"id":"ngawi","name":"Kab. Ngawi","lon":111.4472,"lat":-7.4099,"kota":false,"kw":["NGAWI"]},{"id":"magetan","name":"Kab. Magetan","lon":111.3288,"lat":-7.6439,"kota":false,"kw":["MAGETAN"]},{"id":"madiun","name":"Kab. Madiun","lon":111.6461,"lat":-7.6596,"kota":false,"kw":["KABUPATEN MADIUN"]},{"id":"ponorogo","name":"Kab. Ponorogo","lon":111.4653,"lat":-7.8633,"kota":false,"kw":["PONOROGO"]},{"id":"pacitan","name":"Kab. Pacitan","lon":111.1071,"lat":-8.1935,"kota":false,"kw":["PACITAN"]},{"id":"trenggalek","name":"Kab. Trenggalek","lon":111.7093,"lat":-8.0487,"kota":false,"kw":["TRENGGALEK"]},{"id":"tulungagung","name":"Kab. Tulungagung","lon":111.9006,"lat":-8.0656,"kota":false,"kw":["TULUNGAGUNG"]},{"id":"kediri","name":"Kab. Kediri","lon":112.0178,"lat":-7.8003,"kota":false,"kw":["KABUPATEN KEDIRI"]},{"id":"nganjuk","name":"Kab. Nganjuk","lon":111.894,"lat":-7.6044,"kota":false,"kw":["NGANJUK"]},{"id":"jombang","name":"Kab. Jombang","lon":112.2403,"lat":-7.546,"kota":false,"kw":["JOMBANG"]},{"id":"mojokerto","name":"Kab. Mojokerto","lon":112.5218,"lat":-7.5241,"kota":false,"kw":["KABUPATEN MOJOKERTO"]},{"id":"malang","name":"Kab. Malang","lon":112.7226,"lat":-8.1578,"kota":false,"kw":["KABUPATEN MALANG"]},{"id":"pasuruan","name":"Kab. Pasuruan","lon":112.9059,"lat":-7.7596,"kota":false,"kw":["KABUPATEN PASURUAN"]},{"id":"probolinggo","name":"Kab. Probolinggo","lon":113.2149,"lat":-8.0168,"kota":false,"kw":["KABUPATEN PROBOLINGGO"]},{"id":"lumajang","name":"Kab. Lumajang","lon":113.2195,"lat":-8.1299,"kota":false,"kw":["LUMAJANG"]},{"id":"jember","name":"Kab. Jember","lon":113.7004,"lat":-8.1724,"kota":false,"kw":["JEMBER"]},{"id":"bondowoso","name":"Kab. Bondowoso","lon":113.8235,"lat":-7.9095,"kota":false,"kw":["BONDOWOSO"]},{"id":"situbondo","name":"Kab. Situbondo","lon":114.0051,"lat":-7.7064,"kota":false,"kw":["SITUBONDO"]},{"id":"banyuwangi","name":"Kab. Banyuwangi","lon":114.3674,"lat":-8.2191,"kota":false,"kw":["BANYUWANGI"]},{"id":"bangkalan","name":"Kab. Bangkalan","lon":112.9998,"lat":-7.0347,"kota":false,"kw":["BANGKALAN"]},{"id":"sampang","name":"Kab. Sampang","lon":113.2475,"lat":-7.1827,"kota":false,"kw":["SAMPANG"]},{"id":"pamekasan","name":"Kab. Pamekasan","lon":113.4743,"lat":-7.1573,"kota":false,"kw":["PAMEKASAN"]},{"id":"sumenep","name":"Kab. Sumenep","lon":113.8613,"lat":-7.0153,"kota":false,"kw":["SUMENEP"]},{"id":"prov-jatim","name":"Prov. Jawa Timur","lon":112.7578,"lat":-7.1975,"kota":true,"kw":["PROVINSI JAWA TIMUR","GUBERNUR"]}];
+const DEFAULT_DATA = [{"id":"sidoarjo","name":"Kab. Sidoarjo","lon":112.7183,"lat":-7.4558,"kota":false,"total":128,"diterima":126,"dikembalikan":2,"ulang":0,"raperda":0,"raperkada":128},{"id":"sampang","name":"Kab. Sampang","lon":113.2475,"lat":-7.1827,"kota":false,"total":122,"diterima":92,"dikembalikan":4,"ulang":0,"raperda":0,"raperkada":122},{"id":"banyuwangi","name":"Kab. Banyuwangi","lon":114.3674,"lat":-8.2191,"kota":false,"total":67,"diterima":50,"dikembalikan":4,"ulang":1,"raperda":6,"raperkada":61},{"id":"magetan","name":"Kab. Magetan","lon":111.3288,"lat":-7.6439,"kota":false,"total":53,"diterima":30,"dikembalikan":13,"ulang":1,"raperda":6,"raperkada":44},{"id":"jember","name":"Kab. Jember","lon":113.7004,"lat":-8.1724,"kota":false,"total":53,"diterima":44,"dikembalikan":4,"ulang":1,"raperda":3,"raperkada":49},{"id":"tulungagung","name":"Kab. Tulungagung","lon":111.9006,"lat":-8.0656,"kota":false,"total":48,"diterima":30,"dikembalikan":1,"ulang":0,"raperda":0,"raperkada":48},{"id":"madiun-k","name":"Kota Madiun","lon":111.5228,"lat":-7.6298,"kota":true,"total":48,"diterima":36,"dikembalikan":6,"ulang":0,"raperda":3,"raperkada":45},{"id":"probolinggo-k","name":"Kota Probolinggo","lon":113.2151,"lat":-7.7543,"kota":true,"total":45,"diterima":23,"dikembalikan":6,"ulang":4,"raperda":5,"raperkada":37},{"id":"bojonegoro","name":"Kab. Bojonegoro","lon":111.8814,"lat":-7.1509,"kota":false,"total":38,"diterima":23,"dikembalikan":14,"ulang":1,"raperda":0,"raperkada":37},{"id":"pasuruan","name":"Kab. Pasuruan","lon":112.9059,"lat":-7.7596,"kota":false,"total":37,"diterima":12,"dikembalikan":14,"ulang":0,"raperda":0,"raperkada":35},{"id":"trenggalek","name":"Kab. Trenggalek","lon":111.7093,"lat":-8.0487,"kota":false,"total":34,"diterima":17,"dikembalikan":2,"ulang":2,"raperda":5,"raperkada":28},{"id":"kediri-k","name":"Kota Kediri","lon":112.0089,"lat":-7.8149,"kota":true,"total":33,"diterima":22,"dikembalikan":6,"ulang":0,"raperda":2,"raperkada":29},{"id":"blitar","name":"Kab. Blitar","lon":112.2169,"lat":-8.0983,"kota":false,"total":31,"diterima":17,"dikembalikan":0,"ulang":4,"raperda":22,"raperkada":6},{"id":"mojokerto","name":"Kab. Mojokerto","lon":112.5218,"lat":-7.5241,"kota":false,"total":29,"diterima":13,"dikembalikan":5,"ulang":0,"raperda":9,"raperkada":20},{"id":"malang-k","name":"Kota Malang","lon":112.6304,"lat":-7.9797,"kota":true,"total":24,"diterima":17,"dikembalikan":3,"ulang":0,"raperda":1,"raperkada":23},{"id":"nganjuk","name":"Kab. Nganjuk","lon":111.894,"lat":-7.6044,"kota":false,"total":24,"diterima":24,"dikembalikan":0,"ulang":0,"raperda":0,"raperkada":24},{"id":"sumenep","name":"Kab. Sumenep","lon":113.8613,"lat":-7.0153,"kota":false,"total":20,"diterima":8,"dikembalikan":0,"ulang":0,"raperda":5,"raperkada":13},{"id":"pamekasan","name":"Kab. Pamekasan","lon":113.4743,"lat":-7.1573,"kota":false,"total":19,"diterima":1,"dikembalikan":10,"ulang":6,"raperda":16,"raperkada":1},{"id":"pasuruan-k","name":"Kota Pasuruan","lon":112.9075,"lat":-7.6449,"kota":true,"total":19,"diterima":10,"dikembalikan":4,"ulang":0,"raperda":4,"raperkada":15},{"id":"prov-jatim","name":"Prov. Jawa Timur","lon":112.7578,"lat":-7.1975,"kota":true,"total":18,"diterima":18,"dikembalikan":0,"ulang":0,"raperda":2,"raperkada":16},{"id":"situbondo","name":"Kab. Situbondo","lon":114.0051,"lat":-7.7064,"kota":false,"total":16,"diterima":14,"dikembalikan":0,"ulang":1,"raperda":2,"raperkada":12},{"id":"batu","name":"Kota Batu","lon":112.5277,"lat":-7.8726,"kota":true,"total":16,"diterima":15,"dikembalikan":0,"ulang":0,"raperda":8,"raperkada":8},{"id":"probolinggo","name":"Kab. Probolinggo","lon":113.2149,"lat":-8.0168,"kota":false,"total":13,"diterima":11,"dikembalikan":2,"ulang":0,"raperda":8,"raperkada":5},{"id":"ponorogo","name":"Kab. Ponorogo","lon":111.4653,"lat":-7.8633,"kota":false,"total":12,"diterima":8,"dikembalikan":4,"ulang":0,"raperda":3,"raperkada":9},{"id":"pacitan","name":"Kab. Pacitan","lon":111.1071,"lat":-8.1935,"kota":false,"total":10,"diterima":8,"dikembalikan":2,"ulang":0,"raperda":6,"raperkada":4},{"id":"kediri","name":"Kab. Kediri","lon":112.0178,"lat":-7.9003,"kota":false,"total":7,"diterima":2,"dikembalikan":0,"ulang":3,"raperda":5,"raperkada":2},{"id":"lumajang","name":"Kab. Lumajang","lon":113.2195,"lat":-8.1299,"kota":false,"total":6,"diterima":5,"dikembalikan":1,"ulang":0,"raperda":5,"raperkada":1},{"id":"ngawi","name":"Kab. Ngawi","lon":111.4472,"lat":-7.4099,"kota":false,"total":6,"diterima":4,"dikembalikan":2,"ulang":0,"raperda":0,"raperkada":6},{"id":"surabaya","name":"Kota Surabaya","lon":112.7378,"lat":-7.2275,"kota":true,"total":5,"diterima":2,"dikembalikan":1,"ulang":0,"raperda":4,"raperkada":0},{"id":"gresik","name":"Kab. Gresik","lon":112.6552,"lat":-7.1571,"kota":false,"total":5,"diterima":5,"dikembalikan":0,"ulang":0,"raperda":4,"raperkada":0},{"id":"blitar-k","name":"Kota Blitar","lon":112.1602,"lat":-8.0954,"kota":true,"total":4,"diterima":3,"dikembalikan":0,"ulang":0,"raperda":4,"raperkada":0},{"id":"lamongan","name":"Kab. Lamongan","lon":112.4148,"lat":-7.1183,"kota":false,"total":3,"diterima":1,"dikembalikan":2,"ulang":0,"raperda":0,"raperkada":3},{"id":"jombang","name":"Kab. Jombang","lon":112.2403,"lat":-7.546,"kota":false,"total":2,"diterima":2,"dikembalikan":0,"ulang":0,"raperda":1,"raperkada":0}]
+;
+
+let DATA = [];
+
+// ════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ════════════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  document.getElementById('view-board').classList.toggle('active', tab==='board');
+  document.getElementById('view-admin').classList.toggle('active', tab==='admin');
+  document.getElementById('tab-board').classList.toggle('active', tab==='board');
+  document.getElementById('tab-admin').classList.toggle('active', tab==='admin');
+  document.getElementById('ticker-wrap').style.display = tab==='board' ? 'flex' : 'none';
+  if(tab==='board') setTimeout(drawMap, 50);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CLOCK
+// ════════════════════════════════════════════════════════════════════
+function tickClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    n.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const days=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const mon=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  document.getElementById('clock-date').textContent =
+    days[n.getDay()]+', '+n.getDate()+' '+mon[n.getMonth()]+' '+n.getFullYear();
+}
+tickClock(); setInterval(tickClock,1000);
+
+// ════════════════════════════════════════════════════════════════════
+// COLOR HELPERS
+// ════════════════════════════════════════════════════════════════════
+function tierColor(pct,kota) {
+  if(kota)    return '#C8102E';
+  if(pct>=90) return '#1DB87A';
+  if(pct>=75) return '#0891b2';
+  if(pct>=50) return '#0e7ab0';
+  if(pct>=25) return '#1e5799';
+  return '#1a3a5c';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RENDER BOARD
+// ════════════════════════════════════════════════════════════════════
+function renderBoard() {
+  DATA.forEach(d => { d.pct = d.total>0 ? Math.round(d.diterima/d.total*1000)/10 : 0; });
+  const sorted = [...DATA].sort((a,b)=>b.total-a.total);
+
+  const T  = DATA.reduce((s,d)=>s+d.total,0);
+  const DT = DATA.reduce((s,d)=>s+d.diterima,0);
+  const KB = DATA.reduce((s,d)=>s+d.dikembalikan,0);
+  const UL = DATA.reduce((s,d)=>s+d.ulang,0);
+  const RD = DATA.reduce((s,d)=>s+d.raperda,0);
+  const RK = DATA.reduce((s,d)=>s+d.raperkada,0);
+  const PCT = T>0 ? Math.round(DT/T*1000)/10 : 0;
+
+  // Big stat
+  document.getElementById('big-pct').textContent = PCT + '%';
+  document.getElementById('big-sub').textContent = `${DT} dari ${T} rancangan diterima`;
+
+  // Ring chart
+  const C = 213.628;
+  const dtDash = T>0 ? (DT/T*C) : 0;
+  const kbDash = T>0 ? (KB/T*C) : 0;
+  const dtOff = C*0.25;
+  const kbOff = C*0.25 - dtDash;
+  const ringD = document.getElementById('ring-diterima');
+  const ringK = document.getElementById('ring-kembali');
+  ringD.setAttribute('stroke-dasharray', `${dtDash} ${C-dtDash}`);
+  ringD.setAttribute('stroke-dashoffset', dtOff);
+  ringK.setAttribute('stroke-dasharray', `${kbDash} ${C-kbDash}`);
+  ringK.setAttribute('stroke-dashoffset', kbOff);
+  document.getElementById('ring-pct').textContent = PCT + '%';
+
+  // Ring labels
+  document.getElementById('ring-labels').innerHTML = `
+    <div class="rl"><div class="rl-dot" style="background:#1DB87A"></div><span class="rl-name">Diterima</span><span class="rl-val">${DT}</span></div>
+    <div class="rl"><div class="rl-dot" style="background:#C8102E"></div><span class="rl-name">Dikembalikan</span><span class="rl-val">${KB}</span></div>
+    <div class="rl"><div class="rl-dot" style="background:#E8A020"></div><span class="rl-name">Penj. Ulang</span><span class="rl-val">${UL}</span></div>
+    <div class="rl"><div class="rl-dot" style="background:#2B8EE8"></div><span class="rl-name">Raperda</span><span class="rl-val">${RD}</span></div>
+    <div class="rl"><div class="rl-dot" style="background:#C9A84C"></div><span class="rl-name">Raperkada</span><span class="rl-val">${RK}</span></div>
+  `;
+
+  // KPI grid
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi"><div class="kpi-accent" style="background:#C9A84C"></div><div class="kpi-v" style="color:#C9A84C">${T}</div><div class="kpi-l">Total Rancangan</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:#1DB87A"></div><div class="kpi-v" style="color:#1DB87A">${DT}</div><div class="kpi-l">Diterima</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:#C8102E"></div><div class="kpi-v" style="color:#C8102E">${KB}</div><div class="kpi-l">Dikembalikan</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:#2B8EE8"></div><div class="kpi-v" style="color:#2B8EE8">${DATA.length}</div><div class="kpi-l">Daerah Aktif</div></div>
+  `;
+
+  // Top 5
+  const top5 = sorted.slice(0,5);
+  const maxT = top5.length ? top5[0].total : 1;
+  document.getElementById('top5').innerHTML = top5.map(d => `
+    <div>
+      <div class="bar-meta">
+        <span class="bar-name">${d.name}</span>
+        <span class="bar-pct">${d.total} · ${d.pct}%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${d.total/maxT*100}%"></div></div>
+    </div>`).join('');
+
+  // Right scroll list
+  const si = document.getElementById('scroll-inner');
+  function makeItems(items) {
+    return items.map((d,i) => {
+      const bc = d.pct>=75?'bg-g':d.pct>=50?'bg-a':'bg-r';
+      return `<div class="d-item">
+        <span class="d-rank">${i+1}</span>
+        <span class="d-dot" style="background:${tierColor(d.pct,d.kota)}"></span>
+        <span class="d-name">${d.name}</span>
+        <span class="d-badge ${bc}">${d.pct}%</span>
+      </div>`;
+    }).join('');
+  }
+  si.innerHTML = makeItems(sorted) + makeItems(sorted);
+  const itemHeight = 38;
+  const totalH = sorted.length * itemHeight;
+  const dur = Math.max(sorted.length * 1.4, 8);
+  si.style.animation = `scrollUp ${dur}s linear infinite`;
+  let styleEl = document.getElementById('scroll-keyframes');
+  if(!styleEl) { styleEl = document.createElement('style'); styleEl.id='scroll-keyframes'; document.head.appendChild(styleEl); }
+  styleEl.textContent = `@keyframes scrollUp { 0%{transform:translateY(0);} 100%{transform:translateY(-${totalH}px);} }`;
+  si.onmouseenter = () => si.style.animationPlayState='paused';
+  si.onmouseleave = () => si.style.animationPlayState='running';
+  document.getElementById('right-sub').textContent = `${DATA.length} daerah · diurutkan berdasarkan jumlah pengajuan`;
+
+  // Ticker
+  const tickerData = sorted.slice(0,12).map(d => {
+    const tc = d.pct>=75?'rgba(29,184,122,.3)':'rgba(200,16,46,.3)';
+    const tv = d.pct>=75?'#1DB87A':'#E84060';
+    return `<span class="t-item">${d.name}<span class="t-badge" style="background:${tc};color:${tv}">${d.pct}% DITERIMA</span><span class="t-sep">·</span>${d.total} rancangan</span>`;
+  });
+  tickerData.push(`<span class="t-item"><span class="t-badge" style="background:rgba(201,168,76,.25);color:#C9A84C">REKAPITULASI: ${T} RANCANGAN · ${DT} DITERIMA · ${PCT}% TINGKAT PENERIMAAN</span></span>`);
+  const tickerHTML = tickerData.join('<span class="t-sep" style="padding:0 6px">◆</span>');
+  document.getElementById('ticker-inner').innerHTML = tickerHTML + '<span style="padding:0 80px"></span>' + tickerHTML + '<span style="padding:0 80px"></span>';
+
+  drawMap();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// D3 MAP
+// ════════════════════════════════════════════════════════════════════
+function drawMap() {
+  const wrap = document.getElementById('map-wrap');
+  const svg  = d3.select('#map-svg');
+  const ttEl = document.getElementById('tt');
+  svg.selectAll('*').remove();
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if(W===0||H===0) return;
+  const jf = GEO.features.find(f => f.properties.id === 'IDJI');
+  const proj = d3.geoMercator().fitExtent([[36,48],[W-20,H-20]], jf);
+  const path = d3.geoPath().projection(proj);
+
+  const g = svg.append('g');
+  for(let x=0;x<W;x+=60) g.append('line').attr('x1',x).attr('y1',0).attr('x2',x).attr('y2',H).attr('stroke','rgba(26,50,85,.07)').attr('stroke-width',1);
+  for(let y=0;y<H;y+=60) g.append('line').attr('x1',0).attr('y1',y).attr('x2',W).attr('y2',y).attr('stroke','rgba(26,50,85,.07)').attr('stroke-width',1);
+
+  const defs = svg.append('defs');
+  const filt = defs.append('filter').attr('id','glow').attr('x','-30%').attr('y','-30%').attr('width','160%').attr('height','160%');
+  filt.append('feGaussianBlur').attr('stdDeviation','5').attr('result','b');
+  const fm = filt.append('feMerge');
+  fm.append('feMergeNode').attr('in','b');
+  fm.append('feMergeNode').attr('in','SourceGraphic');
+
+  GEO.features.filter(f=>f.properties.id!=='IDJI').forEach(feat =>
+    svg.append('path').datum(feat).attr('d',path).attr('class','r-nb')
+  );
+
+  svg.append('path').datum(jf).attr('d',path).attr('fill','none')
+    .attr('stroke','rgba(201,168,76,.1)').attr('stroke-width',10).attr('filter','url(#glow)');
+  svg.append('path').datum(jf).attr('d',path).attr('class','r-jatim');
+  svg.append('path').datum(jf).attr('d',path).attr('fill','none')
+    .attr('stroke','rgba(30,72,112,.9)').attr('stroke-width',1.5);
+
+  DATA.forEach(d => {
+    const [cx,cy] = proj([d.lon, d.lat]);
+    if(cx<0||cx>W||cy<0||cy>H) return;
+    const c = tierColor(d.pct, d.kota);
+    const r = Math.max(5, Math.min(15, d.total*0.085+4.5));
+    const gr = svg.append('g')
+      .attr('transform',`translate(${cx},${cy})`)
+      .style('cursor','pointer')
+      .on('mousemove', e => {
+        const pc = d.pct>=75?'#1DB87A':d.pct>=50?'#E8A020':'#E84060';
+        ttEl.style.display='block';
+        const rect=wrap.getBoundingClientRect();
+        let tx=e.clientX-rect.left+16, ty=e.clientY-rect.top-12;
+        if(tx+220>W) tx-=235; if(ty+200>H) ty=H-210;
+        ttEl.style.left=tx+'px'; ttEl.style.top=ty+'px';
+        ttEl.innerHTML=`<h3>${d.name}</h3>
+          <div class="tt-r"><span class="tt-l">Total Rancangan</span><span class="tt-v">${d.total}</span></div>
+          <div class="tt-r"><span class="tt-l">Diterima</span><span class="tt-v" style="color:#1DB87A">${d.diterima}</span></div>
+          <div class="tt-r"><span class="tt-l">Dikembalikan</span><span class="tt-v" style="color:#E84060">${d.dikembalikan}</span></div>
+          <div class="tt-r"><span class="tt-l">Penj. Ulang</span><span class="tt-v" style="color:#E8A020">${d.ulang}</span></div>
+          <div class="tt-r"><span class="tt-l">Raperda / Raperkada</span><span class="tt-v">${d.raperda} / ${d.raperkada}</span></div>
+          <div class="tt-r"><span class="tt-l">% Diterima</span><span class="tt-v" style="color:${pc};font-size:14px">${d.pct}%</span></div>
+          <div class="tt-prog"><div class="tt-pf" style="width:${d.pct}%;background:${pc}"></div></div>`;
+      })
+      .on('mouseleave',()=>{ ttEl.style.display='none'; });
+
+    if(d.pct>=90) {
+      const pulse = gr.append('circle').attr('r',r+4).attr('fill','none')
+        .attr('stroke',c).attr('stroke-width',1.5).attr('opacity',.3);
+      (function animPulse() {
+        pulse.transition().duration(1400).attr('r',r+9).attr('opacity',0)
+          .transition().duration(0).attr('r',r+4).attr('opacity',.3)
+          .on('end', animPulse);
+      })();
+    }
+
+    gr.append('circle').attr('r',r+4).attr('fill',c).attr('opacity',.1);
+    gr.append('circle').attr('r',r).attr('fill',c).attr('opacity',.88)
+      .attr('stroke','rgba(245,240,232,.45)').attr('stroke-width',d.kota?1.5:.8);
+
+    if(d.total>=20||d.kota) {
+      gr.append('text')
+        .attr('y',r+11).attr('text-anchor','middle')
+        .attr('font-size','8').attr('fill','rgba(212,206,196,.65)')
+        .attr('font-family','DM Sans,sans-serif').attr('font-weight','500')
+        .text(d.name.replace('Kota ','').replace('Kab. ','').replace('Prov. ','').split(' ')[0]);
+    }
+  });
+
+  svg.append('text').attr('x',W*.42).attr('y',H*.56)
+    .attr('text-anchor','middle').attr('font-size','11')
+    .attr('font-family','Playfair Display,serif')
+    .attr('fill','rgba(26,50,85,.38)').attr('font-weight','700').attr('letter-spacing','4')
+    .text('JAWA TIMUR');
+}
+window.addEventListener('resize', () => { if(document.getElementById('view-board').classList.contains('active')) drawMap(); });
+
+// ════════════════════════════════════════════════════════════════════
+// EXCEL PARSING
+// ════════════════════════════════════════════════════════════════════
+let pendingData = null;
+
+function normJenis(j) {
+  j = (j||'').toUpperCase();
+  if(j.includes('RAPERKADA')||j.includes('RAPERBUP')||j.includes('RAPERWAL')||j.includes('RAPERGUB')||j.includes('PERKADA')) return 'RAPERKADA';
+  if(j.includes('RAPERDA')||j.includes('PERDA')) return 'RAPERDA';
+  return null;
+}
+function normStatus(s) {
+  s = (s||'').toUpperCase();
+  if(s.includes('DITERIMA')||s.includes('TERIMA')) return 'DITERIMA';
+  if(s.includes('DIKEMBALI')||s.includes('KEMBALI')) return 'DIKEMBALIKAN';
+  if(s.includes('JADWAL')||s.includes('PENJADWALAN')) return 'ULANG';
+  return null;
+}
+function matchRegion(pemrakarsa) {
+  const up = (pemrakarsa||'').toUpperCase();
+  for(const r of REGIONS) {
+    for(const kw of r.kw) {
+      if(up.includes(kw)) return r;
+    }
+  }
+  return null;
+}
+
+function processWorkbook(wb) {
+  const stats = {};
+  REGIONS.forEach(r => stats[r.id] = {total:0,diterima:0,dikembalikan:0,ulang:0,raperda:0,raperkada:0});
+  const seenNomor = new Set();
+  let totalRows = 0, matchedRows = 0, dupSkipped = 0;
+
+  wb.SheetNames.forEach(sheetName => {
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
+    let headerIdx=-1, pemCol=-1, statusCol=-1, jenisCol=-1, nomorCol=-1;
+    for(let i=0;i<Math.min(rows.length,15);i++){
+      const row = rows[i].map(c=>String(c).trim());
+      const pi = row.findIndex(c=>/pemrakarsa/i.test(c));
+      const si = row.findIndex(c=>/status/i.test(c));
+      if(pi>=0 && si>=0){
+        headerIdx=i; pemCol=pi; statusCol=si;
+        jenisCol = row.findIndex(c=>/jenis/i.test(c));
+        nomorCol = row.findIndex(c=>/no\.?\s*surat|nomor\s*surat|^no\.?$/i.test(c));
+        break;
+      }
+    }
+    if(headerIdx<0) return;
+
+    for(let i=headerIdx+1;i<rows.length;i++){
+      const row = rows[i];
+      const pem = String(row[pemCol]||'').trim();
+      if(pem.length<5 || pem.toLowerCase()==='nan') continue;
+      const status = String(row[statusCol]||'').trim();
+      const jenis = jenisCol>=0 ? String(row[jenisCol]||'').trim() : '';
+      totalRows++;
+
+      // dedup by nomor surat (if column exists and value non-empty)
+      if(nomorCol>=0) {
+        const nomor = String(row[nomorCol]||'').trim();
+        if(nomor.length>3) {
+          const key = nomor + '|' + pem.toUpperCase();
+          if(seenNomor.has(key)) { dupSkipped++; continue; }
+          seenNomor.add(key);
+        }
+      }
+
+      const region = matchRegion(pem);
+      if(!region) continue;
+      matchedRows++;
+
+      const s = stats[region.id];
+      s.total++;
+      const st = normStatus(status);
+      if(st==='DITERIMA') s.diterima++;
+      else if(st==='DIKEMBALIKAN') s.dikembalikan++;
+      else if(st==='ULANG') s.ulang++;
+
+      const jn = normJenis(jenis);
+      if(jn==='RAPERDA') s.raperda++;
+      else if(jn==='RAPERKADA') s.raperkada++;
+    }
+  });
+
+  const result = REGIONS.filter(r=>stats[r.id].total>0).map(r=>({
+    id:r.id, name:r.name, lon:r.lon, lat:r.lat, kota:r.kota, ...stats[r.id]
+  }));
+
+  return { data: result, meta: { totalRows, matchedRows, dupSkipped, unmatched: totalRows-matchedRows-dupSkipped } };
+}
+
+// ════════════════════════════════════════════════════════════════════
+// FILE UPLOAD HANDLERS
+// ════════════════════════════════════════════════════════════════════
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => {
+  if(e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function showStatus(type, msg) {
+  const el = document.getElementById('status-msg');
+  el.className = 'status-msg ' + type;
+  el.textContent = msg;
+}
+
+function handleFile(file) {
+  if(!file.name.match(/\.(xlsx|xls)$/i)) {
+    showStatus('err', '❌ File harus berformat .xlsx atau .xls');
+    return;
+  }
+  showStatus('info', '⏳ Membaca file ' + file.name + ' ...');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const { data, meta } = processWorkbook(wb);
+      if(data.length === 0) {
+        showStatus('err', '❌ Tidak ada data yang dikenali. Pastikan kolom "Pemrakarsa" dan "STATUS" ada di setiap sheet.');
+        return;
+      }
+      pendingData = data;
+      showPreview(data, meta);
+      showStatus('ok', `✅ Berhasil membaca ${meta.matchedRows} baris dari ${wb.SheetNames.length} sheet (${meta.dupSkipped} duplikat dilewati, ${meta.unmatched} baris tidak cocok dengan daerah).`);
+      document.getElementById('admin-actions').style.display = 'flex';
+    } catch(err) {
+      showStatus('err', '❌ Gagal membaca file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showPreview(data, meta) {
+  const sorted = [...data].sort((a,b)=>b.total-a.total);
+  const T = data.reduce((s,d)=>s+d.total,0);
+  const DT = data.reduce((s,d)=>s+d.diterima,0);
+  let html = `<thead><tr>
+    <th>Daerah</th><th>Total</th><th>Diterima</th><th>Dikembalikan</th><th>Penj. Ulang</th><th>Raperda</th><th>Raperkada</th><th>% Diterima</th>
+  </tr></thead><tbody>`;
+  sorted.forEach(d => {
+    const pct = d.total>0 ? Math.round(d.diterima/d.total*1000)/10 : 0;
+    html += `<tr>
+      <td>${d.name}</td><td>${d.total}</td><td style="color:#1DB87A">${d.diterima}</td>
+      <td style="color:#E84060">${d.dikembalikan}</td><td style="color:#E8A020">${d.ulang}</td>
+      <td>${d.raperda}</td><td>${d.raperkada}</td><td style="color:#C9A84C;font-weight:600">${pct}%</td>
+    </tr>`;
+  });
+  html += `<tr style="font-weight:700;border-top:2px solid var(--gold)">
+    <td>TOTAL (${data.length} daerah)</td><td>${T}</td><td style="color:#1DB87A">${DT}</td>
+    <td colspan="4"></td><td style="color:#C9A84C">${T>0?Math.round(DT/T*1000)/10:0}%</td>
+  </tr>`;
+  html += `</tbody>`;
+  document.getElementById('preview-table').innerHTML = html;
+  document.getElementById('preview-wrap').style.display = 'block';
+}
+
+function resetUpload() {
+  pendingData = null;
+  fileInput.value = '';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('admin-actions').style.display = 'none';
+  document.getElementById('status-msg').className = 'status-msg';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// STORAGE — uses window.storage when available (Claude.ai preview),
+// falls back to localStorage when opened as a standalone local file
+// ════════════════════════════════════════════════════════════════════
+const STORAGE_KEY = 'harmonisasi-jatim-data';
+const hasCloudStorage = (typeof window.storage !== 'undefined' && window.storage && typeof window.storage.set === 'function');
+
+async function storageSet(key, value) {
+  if(hasCloudStorage) return await window.storage.set(key, value, true);
+  localStorage.setItem(key, value);
+  return true;
+}
+async function storageGet(key) {
+  if(hasCloudStorage) return await window.storage.get(key, true);
+  const v = localStorage.getItem(key);
+  return v ? { value: v } : null;
+}
+
+async function saveData() {
+  if(!pendingData) return;
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; btn.textContent = '⏳ Menyimpan...';
+  try {
+    await storageSet(STORAGE_KEY, JSON.stringify(pendingData));
+    DATA = pendingData;
+    renderBoard();
+    const note = hasCloudStorage
+      ? '✅ Data berhasil disimpan dan papan informasi telah diperbarui!'
+      : '✅ Data berhasil disimpan di browser ini. Papan informasi telah diperbarui! (Penyimpanan bersifat lokal per-browser karena file dibuka langsung sebagai file HTML)';
+    showStatus('ok', note);
+    btn.textContent = '✅ Tersimpan';
+    setTimeout(() => switchTab('board'), 900);
+  } catch(err) {
+    showStatus('err', '❌ Gagal menyimpan: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ Simpan & Tampilkan di Papan Informasi';
+  }
+}
+
+async function restoreDefault() {
+  try {
+    await storageSet(STORAGE_KEY, JSON.stringify(DEFAULT_DATA));
+    DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    renderBoard();
+    showStatus('ok', '✅ Data dikembalikan ke contoh awal.');
+    resetUpload();
+  } catch(err) {
+    showStatus('err', '❌ Gagal reset: ' + err.message);
+  }
+}
+
+async function loadInitialData() {
+  try {
+    const result = await storageGet(STORAGE_KEY);
+    if(result && result.value) {
+      DATA = JSON.parse(result.value);
+    } else {
+      DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    }
+  } catch(err) {
+    DATA = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  }
+  renderBoard();
+}
+
+loadInitialData();
+
+// Update storage note based on environment
+(function() {
+  const note = document.getElementById('storage-note');
+  if(hasCloudStorage) {
+    note.innerHTML = '💾 Data yang disimpan akan terlihat oleh <b>semua orang</b> yang membuka papan informasi ini (data bersama / shared).';
+  } else {
+    note.innerHTML = '💾 File ini dibuka sebagai HTML lokal — data disimpan di <b>browser ini saja</b> (localStorage). Untuk berbagi ke perangkat/orang lain, hasil upload akan tersimpan masing-masing per browser. Gunakan browser & perangkat yang sama untuk melihat data terbaru, atau host file ini di server agar bisa dipakai bersama.';
+  }
+})();
+</script>
+</body>
+</html>
